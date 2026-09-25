@@ -5,12 +5,12 @@ import { test } from 'node:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { ElicitRequestSchema, ResourceListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import { elicitationApprover } from '../lib/approval.js'
 import { createGroupStore, describeGroup, findMe, groupKey, resolveTarget } from '../lib/groups.js'
 import { createJournal } from '../lib/journal.js'
 import { INSTRUCTIONS, registerTools } from '../lib/tools.js'
-import { fakePrepare, setup, tmp } from './helpers.js'
+import { fakePrepare, setup, tick, tmp } from './helpers.js'
 
 const G = '120363000000000001@g.us'
 const G2 = '120363000000000002@g.us'
@@ -315,4 +315,25 @@ test('keys drop emoji modifiers; "1 member" is singular; the list is sorted by n
   h.groups.syncAll({ [G]: meta({ subject: 'Zeta' }), [G2]: meta({ id: G2, subject: 'alpha' }) }, me)
   const list = (await h.call('whatsapp_groups', {})).text
   assert.ok(list.indexOf('"alpha"') < list.indexOf('"Zeta"'), list)
+})
+
+test('MCP: aliases are resources (so the @ menu finds them), and changes tell the client the list changed', async () => {
+  const h = await mcp(() => ({ action: 'accept', content: { send: true } }))
+  let changed = 0
+  h.client.setNotificationHandler(ResourceListChangedNotificationSchema, () => void changed++)
+  await h.call('whatsapp_group_enable', { group: h.ref })
+  await h.call('whatsapp_set_alias', { alias: '@thampalaseteka', to: h.ref })
+  await h.call('whatsapp_set_alias', { alias: 'akka', to: 'Sam' })
+  await tick(20)
+  assert.ok(changed >= 3, `list_changed sent ${changed} times`)
+  const { resources } = await h.client.listResources()
+  const a = resources.find((r) => r.uri === 'wa://alias/thampalaseteka')
+  assert.equal(a.name, '@thampalaseteka')
+  assert.match(a.description, /@thampalaseteka → GROUP "HushChat Team" · 14 members/)
+  const card = (await h.client.readResource({ uri: a.uri })).contents[0].text
+  assert.match(card, /to="@thampalaseteka"/)
+  assert.match(card, /enabled for sending/)
+  assert.ok(!card.includes('@g.us'))
+  assert.match((await h.client.readResource({ uri: 'wa://alias/akka' })).contents[0].text, /@akka → "Sam"/)
+  assert.match((await h.client.readResource({ uri: 'wa://alias/nobody' })).contents[0].text, /No alias @nobody/)
 })

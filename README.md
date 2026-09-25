@@ -35,7 +35,7 @@ From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add w
 | `whatsapp_ask_me` | Ask you in your own chat and wait for the reply (`question`, `options`, `wait_minutes`, `wait_for`) |
 | `whatsapp_set_alias` | Remember `@name` → a contact, or a group (`to: "group:<key>"`). `replace: true` repoints |
 
-Contacts are also listed as `@walink:wa://name` resources.
+Contacts, your aliases and enabled groups are listed as resources, so typing `@` in Claude Code suggests them: `@walink:wa://akka` (contact), `@walink:wa://alias/thampalaseteka` (alias), `@walink:wa://group/test-akka~3e95ad` (group). A new alias or an enabled group tells Claude Code the list changed.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the state machines, failure semantics, recovery and security model.
 
