@@ -64,7 +64,12 @@ Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test 
 
 ## Decisions made (don't re-ask)
 - **No elicitation support** → refuse to send. There's no weaker fallback.
-- **Recipients:** individuals only. **Groups stay blocked** (re-confirmed).
+- **Recipients:** individuals today. **Groups are planned but not built.** On 2026-09-25 the user reversed the earlier "groups stay blocked" decision, under stricter rules. See `docs/specs/2026-09-25-groups-design.md`:
+  - Groups are opt-in: you enable each one in a dialog.
+  - Groups resolve only through an explicit reference (`group:<key>`) or an alias; a plain name never matches a group.
+  - For groups over 50 members, you type the group's name to confirm.
+  - Media stays documents only; images and videos come later.
+  - Raw `@g.us`, broadcast and newsletter IDs are never accepted.
 - **Second session:** it follows. An approved send there takes over, in one dialog. There's no relay between sessions.
 - **Your own chat skips the dialog.** It can only reach you.
 - **Remote approval** of sends to *other people* from the phone: **not now**.
