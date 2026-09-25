@@ -233,7 +233,7 @@ test('unknown number gets a warning; known contacts do not', async () => {
 })
 
 // A follower that takes over when the user approves; `ok: false` simulates a failed handover.
-async function followerSetup({ approve, ok = true, sock } = {}) {
+async function followerSetup({ approve, ok = true, sock, senderOpts = {} } = {}) {
   const calls = []
   let h
   h = await setup({
@@ -241,6 +241,7 @@ async function followerSetup({ approve, ok = true, sock } = {}) {
     approve,
     sock,
     senderOpts: {
+      ...senderOpts,
       takeOver: async () => {
         calls.push(1)
         if (!ok) return { ok: false, reason: 'the other session (pid 4242) did not hand WhatsApp over within 30s' }
@@ -383,4 +384,42 @@ test('file: a follower shows the file with the takeover note, then sends after t
   assert.equal(calls.length, 1)
   assert.match(previews[0].split('\n')[0], /^Send this WhatsApp file to "Sam".*This moves WhatsApp here/)
   assert.equal(sockets[0].sent[0].fileName, 'walink-2.0.0.tgz')
+})
+
+// --- your own chat ---
+
+test('own chat: no approval dialog, and notify heads the text with the session name', async () => {
+  const { sender, sockets, previews, journal } = await setup({ senderOpts: { sessionLabel: 'my-project' } })
+  const r = await sender.notify('Tests done: 77 passed.')
+  assert.equal(r.status, 'SENT')
+  assert.equal(previews.length, 0, 'no dialog')
+  assert.deepEqual(sockets[0].sent[0], { jid: '94770000000@s.whatsapp.net', text: '🤖 my-project\nTests done: 77 passed.', messageId: 'MSG1' })
+  assert.equal(journal.get(r.reqId).self, true)
+  assert.equal(journal.get(r.reqId).kind, 'notify')
+  assert.ok(sender.isOwnMessage('MSG1'), 'its own message id is known')
+  assert.ok(!sender.isOwnMessage('SOMETHING-ELSE'))
+})
+
+test('own chat by number (not just "me") also skips the dialog; others still ask', async () => {
+  const { sender, previews } = await setup()
+  assert.equal((await sender.send({ to: '+94770000000', text: 'note' })).status, 'SENT')
+  assert.equal(previews.length, 0)
+  assert.equal((await sender.send({ to: 'Sam', text: 'hi' })).status, 'SENT')
+  assert.equal(previews.length, 1, 'Sam still needs approval')
+})
+
+test('own chat: a repeat after OUTCOME UNKNOWN is allowed (a duplicate only reaches you)', async () => {
+  let behavior = 'hang'
+  const { sender, sockets } = await setup({ sock: { behavior: () => behavior } })
+  assert.equal((await sender.send({ to: 'me', text: 'ping' })).status, 'OUTCOME UNKNOWN')
+  behavior = 'ack'
+  assert.equal((await sender.send({ to: 'me', text: 'ping' })).status, 'SENT')
+  assert.equal(sockets[0].sent.length, 2)
+})
+
+test('own chat from a follower: takes over without a dialog', async () => {
+  const { sender, previews, calls } = await followerSetup({ senderOpts: { selfJid: () => '94770000000@s.whatsapp.net' } })
+  assert.equal((await sender.send({ to: 'me', text: 'hello' })).status, 'SENT')
+  assert.equal(calls.length, 1)
+  assert.equal(previews.length, 0)
 })

@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import makeWASocket, { fetchLatestBaileysVersion, generateMessageIDV2, useMultiFileAuthState } from '@whiskeysockets/baileys'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -227,6 +227,8 @@ if (LOGIN) {
     approve: elicitationApprover(server),
     takeOver,
     selfJid,
+    // Names this session in phone notifications: the folder Claude Code was started in.
+    sessionLabel: (process.cwd() !== homedir() && basename(process.cwd())) || 'Claude Code',
     newMsgId: () => generateMessageIDV2(conn.me()),
   })
   registerTools(server, {
