@@ -1,6 +1,6 @@
 {
   "name": "@fernandomenuk/walink",
-  "version": "2.0.0-rc.2",
+  "version": "2.0.0-rc.3",
   "description": "WhatsApp MCP server for Claude Code: server-enforced approval, send journal, no silent duplicates",
   "type": "module",
   "bin": {
