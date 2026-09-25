@@ -1,6 +1,6 @@
 # Handoff: walink (WhatsApp MCP for Claude Code)
 
-Last updated 2026-09-25, at the end of the second session. Items marked **TODO** are unfinished.
+Last updated 2026-09-25, late in the second session (after the rc.4 release). Items marked **TODO** are unfinished.
 
 ## Where things are
 
@@ -8,10 +8,10 @@ Last updated 2026-09-25, at the end of the second session. Items marked **TODO**
 | --- | --- |
 | Code | `C:\Users\User\dev\active\whatsapp-automation`. The folder isn't renamed on purpose, because the MCP registration points here. |
 | GitHub | https://github.com/fernandomenuk/walink (private), branch `main`. Everything is pushed. |
-| Latest release | **v2.0.0-rc.3 (preprod)**: a GitHub prerelease with the `.tgz` attached, plus GitHub Packages `@fernandomenuk/walink@2.0.0-rc.3` (dist-tag `next`). Older releases: rc.0 (GitHub only), rc.1, rc.2. |
+| Latest release | **v2.0.0-rc.4 (preprod)**: a GitHub prerelease with the `.tgz` attached, plus GitHub Packages `@fernandomenuk/walink@2.0.0-rc.4` (dist-tag `next`). Older releases: rc.0 (GitHub only), rc.1, rc.2, rc.3. |
 | npm (npmjs.com) | `@fernandomenuk/walink`. **Not published.** No `NPM_TOKEN` secret yet; the release workflow skips npm until one is set. |
 | Claude Code MCP | Registered at user scope as `walink` → `node C:\Users\User\dev\active\whatsapp-automation\server.js` |
-| Runtime data | `~/.whatsapp-mcp/`: `auth/` (linked-device creds, unencrypted), `auth.lock` (+ `auth.lock.handover` during a handover), `contacts.json` (~2,446), `aliases.json`, `sends.jsonl` (the send and question journal; never message text) |
+| Runtime data | `~/.whatsapp-mcp/`: `auth/` (linked-device creds, unencrypted), `auth.lock` (+ `auth.lock.handover` during a handover), `contacts.json` (~2,446), `groups.json` (group metadata only: ~171 groups, never member lists; which ones are enabled), `aliases.json` (aliases may point at a person or a group), `sends.jsonl` (the send and question journal; never message text) |
 | Audit doc | "WhatsApp MCP Review Answers" (Claude Docs): https://claude.ai/code/artifact/99dbc6e0-1fc2-473e-8e76-d78e313afa63. It covers the **old** v1 code. |
 
 ## What walink does now
@@ -58,9 +58,18 @@ Design, failure semantics and the security model are in `docs/DESIGN.md`. User d
 6. `d5872fe` Phone channel (`lib/phone.js`): `whatsapp_ask_me`, reply matching, the inbound filter, and channel pushes (the `claude/channel` capability).
 7. `d6d479e` Soft handover for the phone channel, plus docs.
 8. `e072a74` AI signature on messages to others, and the `🤖 walink · <folder>` header.
-9. Version bumps and releases: rc.1 (`505b2a8`), rc.2 (`a11f747`), rc.3 (`323d3de`).
+9. `906fa4e` Groups design spec (`docs/specs/2026-09-25-groups-design.md`), after a brainstorm that reversed "groups stay blocked".
+10. `34630a7` Groups implemented (spec phases 1-4):
+    - `lib/groups.js`: group store, sync, `group:<slug>~<hash>` keys matched on the hash so they survive renames, and `resolveTarget`.
+    - Tools: `whatsapp_find`, `whatsapp_groups`, `whatsapp_group_enable` (asks you in a dialog) and `whatsapp_group_disable`; group aliases; `wa://group/` resources.
+    - Every group send: a live membership/admin check, the GROUP dialog (you type the name above 50 members), and `cachedGroupMetadata`, so the send goes to exactly the members the dialog showed.
+    - Documents upload first, then send. A failed upload is a certain `NOT SENT` (the `uploading` journal state).
+11. `251ffed` Group key/list fixes: emoji modifiers stripped from keys, "1 member", the list sorted by name.
+12. `ac90a62` The signature became one fixed line: `🤖 This message is written by Claude`.
+13. `7b77413` Aliases appear as `wa://alias/<name>` resources in the `@` menu, and alias/enable/disable changes send `notifications/resources/list_changed`.
+14. Version bumps and releases: rc.1 (`505b2a8`), rc.2 (`a11f747`), rc.3 (`323d3de`), rc.4 (`bb6b19d`).
 
-Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test that needs Developer Mode; it runs in CI on Linux).
+Tests: **113** (`npm test`); 112 pass and 1 is skipped on Windows (a symlink test that needs Developer Mode; it runs in CI on Linux).
 
 ## Decisions made (don't re-ask)
 - **No elicitation support** → refuse to send. There's no weaker fallback.
@@ -91,7 +100,11 @@ Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test 
   - A file (`.tgz`) to `me` arrived as a document.
   - `whatsapp_notify_me`, with no dialog.
   - `whatsapp_ask_me`: the reply "yes" came back as `REPLY`.
-  - Text sends to Akka, including Sinhala.
+  - Text sends to Akka, including Sinhala, and Singlish to Siluu.
+  - **Groups:**
+    - `whatsapp_groups` synced 171 real groups.
+    - Found and enabled "test akka" (2 members) through the dialog, aliased it `@testakka`, and sent "hi" by alias and "hey" through its `wa://group/` resource: both `SENT` with a server ack.
+    - Enabled "තැම්පල සෙට් එක"🤙[2011] (23 members) and aliased it `@thampalaseteka`. Nothing has been sent there yet.
 - **Gotcha:** Accept without ticking **Send** is a decline. The keys are ↑ to `Send:`, Space, then Accept.
 - **TODO, not live-tested yet** (these need channels):
   - A late reply after `NO REPLY YET` should appear in the session.
@@ -103,6 +116,12 @@ Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test 
 - **Optional:** Wi-Fi off mid-send → `OUTCOME UNKNOWN`. It's covered by the crash-injection tests.
 
 ## TODO, in order
+0. **Live-test the rest of groups:**
+   - A document to a group (for example the walink `.tgz` to `@testakka`). This also exercises the upload-then-send path.
+   - A group of more than 50 members (the typed-name dialog).
+   - Refusals: a group you've left, and one where only admins can post and you aren't an admin.
+   - Watch for the exact WhatsApp error text (an open question in the spec).
+   - Also check whether a new alias shows up in the `@` menu **without** `/mcp` reconnect, which tells us whether Claude Code honours `list_changed`.
 1. **Live-test the channel items above.**
    - Exit, then run `claude --dangerously-load-development-channels server:walink` in this folder.
    - Unknowns to watch:
@@ -119,10 +138,13 @@ Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test 
    - They install with `npm i -g ./fernandomenuk-walink-<ver>.tgz` or `npm i -g github:fernandomenuk/walink#v2.0.0-rc.3`.
    - Then `walink login`, then `claude mcp add walink -s user -- walink`. On Windows, use `-- cmd /c walink`.
    - They link *their own* WhatsApp. Tell them about the Baileys and unofficial-client account risk.
-   - Nobody has sent rc.3 to Akka yet. Only the rc.1 file was downloaded, to `~/Downloads`.
+   - Nobody has sent a release to Akka yet. Only the rc.1 file was downloaded, to `~/Downloads`; rc.4 is the one to share now.
 5. **Optional:** required reviewers on the `production` environment. That needs a paid GitHub plan on a private repo.
 
 ## Idea backlog (from brainstorming; not started)
+- **Group fingerprint:** show members you know and the creation date in the enable and send dialogs, to tell same-named groups apart. The user declined it for now; the member count is used instead.
+- **The contact resource card** still tells Claude to send to the raw personal JID. Point it at an alias or reference instead (a follow-up noted in the groups spec).
+- **Images and videos** (groups spec phase 5): need `sharp`/`jimp` and `ffmpeg`, and WhatsApp recompresses them. Also: upload once, send to many.
 - **Read messages**: "what did Akka reply?". Needs careful prompt-injection handling, because other people's text would be treated as data.
 - **Unsend and edit** the last message. Small, and a real safety net.
 - **Delivered/read receipts** in the status and the journal.
@@ -133,7 +155,7 @@ Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test 
 
 ## Handy commands
 ```sh
-npm test                          # 95 tests
+npm test                          # 113 tests
 npm run login                     # re-link / refresh contacts (QR). Refuses if a session holds auth.lock:
                                   #   stop that session's walink server first, and run it in its own terminal window
 gh run list --limit 5             # CI / release runs
