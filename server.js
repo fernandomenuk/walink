@@ -2,7 +2,7 @@
 // walink: WhatsApp MCP server for Claude Code (Baileys linked device). Design and failure semantics: docs/DESIGN.md
 //   node server.js login   -> link by QR (or refresh contacts), then exit
 //   node server.js         -> MCP stdio server (stdout is protocol; all logs go to stderr)
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +14,7 @@ import { elicitationApprover } from './lib/approval.js'
 import { createConnection } from './lib/connection.js'
 import { createContactStore } from './lib/contacts.js'
 import { createJournal } from './lib/journal.js'
-import { acquireLock, releaseLock, startHeartbeat } from './lib/lock.js'
+import { acquireLock, clearHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
 import { log } from './lib/log.js'
 import { createSender } from './lib/sender.js'
 import { INSTRUCTIONS, registerTools } from './lib/tools.js'
@@ -24,6 +24,7 @@ const DIR = process.env.WHATSAPP_MCP_DIR || join(homedir(), '.whatsapp-mcp')
 const AUTH = join(DIR, 'auth')
 const LOCK = join(DIR, 'auth.lock')
 const JOURNAL = join(DIR, 'sends.jsonl')
+const HANDOVER = handoverFile(LOCK)
 mkdirSync(DIR, { recursive: true })
 const LOGIN = process.argv[2] === 'login'
 
@@ -130,7 +131,10 @@ if (LOGIN) {
   let owner = false
   let holder = null
   let journal = null
+  let watch = null
+  let poll = null
   const role = () => ({ owner, holder })
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
   function tryOwn() {
     const lock = acquireLock(LOCK)
@@ -145,6 +149,76 @@ if (LOGIN) {
     journal = createJournal(JOURNAL).load()
     log('info', 'session_owner', { pid: process.pid })
     conn.connect().catch((e) => log('error', 'connect_failed', { err: e.message }))
+    watch = setInterval(checkHandover, 1000)
+    watch.unref()
+  }
+
+  // Follower: poll for a dead owner. Don't grab the lock while another live session is taking over.
+  function follow() {
+    poll ??= setInterval(() => {
+      if (owner) return void (clearInterval(poll), (poll = null))
+      const req = handoverRequest(HANDOVER)
+      if (!req || req.pid === process.pid) tryOwn()
+    }, 10_000)
+  }
+
+  // Owner: another session's user approved a send there. Stop taking sends, let in-flight ones finish
+  // (so the handover never causes an OUTCOME UNKNOWN), then release the session and follow.
+  // ponytail: the old owner may still append late `rejected` lines to sends.jsonl after the new owner loaded it;
+  // they are single small appends, so harmless. A journal per owner if that ever matters.
+  let releasing = false
+  async function checkHandover() {
+    const req = handoverRequest(HANDOVER)
+    if (!owner || releasing || !req || req.pid === process.pid) return
+    releasing = true
+    owner = false
+    log('info', 'handover_requested', { byPid: req.pid })
+    await sender.idle()
+    clearInterval(watch)
+    conn.stop()
+    stopHeartbeat?.()
+    stopHeartbeat = null
+    contacts.flush()
+    journal = null
+    releaseLock(LOCK)
+    holder = { pid: req.pid }
+    releasing = false
+    log('info', 'handover_released', { toPid: req.pid })
+    follow()
+  }
+
+  // Follower: the user approved "take over and send". Ask the owner to step down, then own and connect.
+  async function takeOver() {
+    const from = holder?.pid
+    requestHandover(HANDOVER)
+    try {
+      const deadline = Date.now() + 30_000
+      while (!owner) {
+        if (Date.now() > deadline) {
+          const other = holder?.pid && holder.pid !== from && isAlive(holder.pid)
+          return { ok: false, reason: other ? `another session (pid ${holder.pid}) took over WhatsApp first` : `the other session (pid ${from ?? '?'}) did not hand WhatsApp over within 30s` }
+        }
+        await sleep(500)
+        tryOwn()
+      }
+      const until = Date.now() + 20_000
+      while (!conn.usable()) {
+        if (Date.now() > until) return { ok: false, reason: `this session took over WhatsApp, but ${conn.whyUnusable()}` }
+        await sleep(500)
+      }
+      return { ok: true }
+    } finally {
+      clearHandover(HANDOVER)
+    }
+  }
+
+  // Own chat ID from the linked-device credentials, readable while following.
+  function selfJid() {
+    try {
+      return JSON.parse(readFileSync(join(AUTH, 'creds.json'), 'utf8')).me?.id?.replace(/:\d+@/, '@') ?? null
+    } catch {
+      return null
+    }
   }
 
   const server = new McpServer({ name: 'walink', version: pkg.version }, { instructions: INSTRUCTIONS })
@@ -154,6 +228,8 @@ if (LOGIN) {
     role,
     getJournal: () => journal,
     approve: elicitationApprover(server),
+    takeOver,
+    selfJid,
     newMsgId: () => generateMessageIDV2(conn.me()),
   })
   registerTools(server, {
@@ -168,7 +244,7 @@ if (LOGIN) {
   tryOwn()
   if (!owner) {
     log('info', 'session_follower', { ownerPid: holder?.pid })
-    const poll = setInterval(() => (owner ? clearInterval(poll) : tryOwn()), 10_000)
+    follow()
   }
 
   // Exit with the client: an orphaned process would keep holding the WhatsApp session.

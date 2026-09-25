@@ -85,11 +85,12 @@ export async function setup({ approve = async () => ({ ok: true }), sock = {}, d
   const { conn, sockets } = await connected(sock)
   const previews = []
   let n = 0
+  let isOwner = owner
   const sender = createSender({
     contacts,
     conn,
-    getJournal: () => (owner ? journal : null),
-    role: () => (owner ? { owner: true } : { owner: false, holder: { pid: 4242 } }),
+    getJournal: () => (isOwner ? journal : null),
+    role: () => (isOwner ? { owner: true } : { owner: false, holder: { pid: 4242 } }),
     approve: async (p) => {
       previews.push(p)
       return approve(p)
@@ -99,5 +100,5 @@ export async function setup({ approve = async () => ({ ok: true }), sock = {}, d
     sleep: tick,
     ...senderOpts,
   })
-  return { sender, conn, sockets, contacts, journal, previews, dir }
+  return { sender, conn, sockets, contacts, journal, previews, dir, setOwner: (v) => (isOwner = v) }
 }

@@ -75,9 +75,10 @@ stateDiagram-v2
 ## One owner per linked device
 
 - Every Claude Code session starts its own `server.js`.
-- The first one to create `auth.lock` (O_EXCL) owns the WhatsApp socket and touches the lock every 5s. The others are **followers**: lookups and status work, but sends are refused.
+- The first one to create `auth.lock` (O_EXCL) owns the WhatsApp socket and touches the lock every 5s. The others are **followers**: lookups and status work. A send from a follower shows one approval dialog that also says it moves WhatsApp to this session.
 - A lock is stale when its pid is gone or its heartbeat is older than 30s. That covers Windows pid reuse after a reboot.
-- Followers poll every 10s and take over automatically. On takeover a follower reloads contacts and aliases, then runs journal recovery.
+- **Handover on approval:** when the user approves a follower's send, the follower writes `auth.lock.handover` (`{pid, ts}`). The owner checks for it every second, stops accepting sends (queued ones return `NOTHING SENT`), waits for in-flight sends to finish so the handover never creates an `OUTCOME UNKNOWN`, closes its socket, releases the lock and becomes a follower. The requester takes the lock, connects, runs the existence and duplicate checks it skipped, and sends without a second dialog. It gives up after 30s (hung owner, or another session won the race) with `NOTHING SENT`, and always removes its request file. Requests from dead pids are ignored.
+- Followers poll every 10s and take over automatically when the owner dies (not while another live session's handover request is pending). On takeover a follower reloads contacts and aliases, then runs journal recovery.
 - The server exits when stdin closes, so an orphan can't keep holding the session.
 
 ## Recovery

@@ -229,3 +229,59 @@ test('unknown number gets a warning; known contacts do not', async () => {
   assert.doesNotMatch(previews[1], /not in your synced/)
   await tick()
 })
+
+// A follower that takes over when the user approves; `ok: false` simulates a failed handover.
+async function followerSetup({ approve, ok = true, sock } = {}) {
+  const calls = []
+  let h
+  h = await setup({
+    owner: false,
+    approve,
+    sock,
+    senderOpts: {
+      takeOver: async () => {
+        calls.push(1)
+        if (!ok) return { ok: false, reason: 'the other session (pid 4242) did not hand WhatsApp over within 30s' }
+        h.setOwner(true)
+        return { ok: true }
+      },
+    },
+  })
+  return { ...h, calls }
+}
+
+test('follower: one dialog to take over and send; approval takes over, then sends', async () => {
+  const { sender, sockets, journal, previews, calls } = await followerSetup()
+  const r = await sender.send({ to: 'Sam', text: 'hi' })
+  assert.equal(r.status, 'SENT')
+  assert.equal(calls.length, 1)
+  assert.equal(previews.length, 1, 'no second dialog')
+  assert.match(previews[0].split('\n')[0], /^Send this WhatsApp message to "Sam".*\? This moves WhatsApp here from the other Claude Code session \(pid 4242\)\.$/)
+  assert.equal(sockets[0].sent.length, 1)
+  assert.equal(journal.get(r.reqId).state, 'sent')
+})
+
+test('follower: declining the dialog does not take over or send', async () => {
+  const { sender, sockets, calls } = await followerSetup({ approve: decline })
+  const r = await sender.send({ to: 'Sam', text: 'hi' })
+  assert.equal(r.status, 'NOTHING SENT')
+  assert.equal(calls.length, 0)
+  assert.equal(sockets[0].sent.length, 0)
+})
+
+test('follower: a failed handover sends nothing', async () => {
+  const { sender, sockets } = await followerSetup({ ok: false })
+  const r = await sender.send({ to: 'Sam', text: 'hi' })
+  assert.equal(r.status, 'NOTHING SENT')
+  assert.match(r.text, /approved, but the other session \(pid 4242\) did not hand WhatsApp over/)
+  assert.equal(sockets[0].sent.length, 0)
+})
+
+test('follower: checks skipped before the dialog still run after taking over', async () => {
+  const { sender, sockets, calls } = await followerSetup({ sock: { missing: ['94779999999@s.whatsapp.net'] } })
+  const r = await sender.send({ to: '+94 77 999 9999', text: 'hi' })
+  assert.equal(calls.length, 1, 'took over first')
+  assert.equal(r.status, 'NOTHING SENT')
+  assert.match(r.text, /approved and took over WhatsApp, but .*not on WhatsApp/)
+  assert.equal(sockets[0].sent.length, 0)
+})

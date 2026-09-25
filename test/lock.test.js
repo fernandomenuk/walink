@@ -3,7 +3,7 @@ import { fork } from 'node:child_process'
 import { utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { acquireLock, releaseLock } from '../lib/lock.js'
+import { acquireLock, clearHandover, handoverFile, handoverRequest, releaseLock, requestHandover } from '../lib/lock.js'
 import { tick, tmp } from './helpers.js'
 
 const HOLDER = new URL('./fixtures/hold-lock.js', import.meta.url)
@@ -41,4 +41,17 @@ test('release only removes our own lock', () => {
   writeFileSync(file, JSON.stringify({ pid: process.ppid }))
   releaseLock(file)
   assert.equal(acquireLock(file).owner, false)
+})
+
+test('handover request: readable, only the requester clears it, dead requesters are ignored', () => {
+  const file = handoverFile(join(tmp(), 'auth.lock'))
+  assert.equal(handoverRequest(file), null)
+  requestHandover(file)
+  assert.equal(handoverRequest(file).pid, process.pid)
+  clearHandover(file, process.pid + 1)
+  assert.equal(handoverRequest(file).pid, process.pid, 'someone else cannot clear it')
+  clearHandover(file)
+  assert.equal(handoverRequest(file), null)
+  requestHandover(file, 2 ** 30) // no such process
+  assert.equal(handoverRequest(file), null)
 })
