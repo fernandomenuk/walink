@@ -2,19 +2,18 @@
 
 MCP server that lets Claude Code send WhatsApp messages from your personal account through a Baileys linked device. Every send needs your approval in a dialog that the server itself shows you.
 
-## Setup
+## Install
+
+Requires Node 22+.
 
 ```sh
-npm install
-npm run login        # scan the QR code: WhatsApp > Settings > Linked devices > Link a device
-npm test
+npx -y @fernandomenuk/walink login      # scan the QR code: WhatsApp > Settings > Linked devices > Link a device
+claude mcp add walink -s user -- npx -y @fernandomenuk/walink
 ```
 
-Register it in Claude Code (user scope):
+Use `@fernandomenuk/walink@next` in both commands to run the preprod channel.
 
-```sh
-claude mcp add walink -s user -- node C:\path\to\walink\server.js
-```
+From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add walink -s user -- node /path/to/walink/server.js`.
 
 ## Use
 
@@ -35,3 +34,26 @@ claude mcp add walink -s user -- node C:\path\to\walink\server.js
 Contacts are also listed as `@walink:wa://name` resources.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the state machines, failure semantics, recovery and security model.
+
+## Releasing
+
+Pushing a tag triggers a release. The tag must match the version in `package.json`, and CI (Windows + Linux) must pass before anything is published.
+
+| Channel | Tag | npm dist-tag | GitHub |
+| --- | --- | --- | --- |
+| preprod | `v2.1.0-rc.1` | `next` | prerelease |
+| prod | `v2.1.0` (must be on `main`) | `latest` | release |
+
+```sh
+npm version prerelease --preid rc   # 2.1.0-rc.0 -> 2.1.0-rc.1, commits and tags
+git push --follow-tags              # publishes to @next
+
+npm version 2.1.0                   # promote: commits and tags v2.1.0
+git push --follow-tags              # publishes to @latest
+```
+
+One-time setup:
+- Add an npm automation token as the `NPM_TOKEN` repository secret: `gh secret set NPM_TOKEN`.
+- Optionally, add required reviewers to the `production` environment so a person approves prod publishes.
+
+Re-running a release is safe: versions that are already published are skipped.

@@ -1,0 +1,78 @@
+# Tag-driven releases:
+#   v2.1.0-rc.1  -> preprod: npm dist-tag "next", GitHub prerelease
+#   v2.1.0       -> prod:    npm dist-tag "latest", GitHub release
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    # Add protection rules (required reviewers) to the "production" environment in repo settings to gate prod.
+    environment: ${{ contains(github.ref_name, '-') && 'preprod' || 'production' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+
+      - name: Resolve channel and check the tag matches package.json
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          pkg="v$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag $tag does not match package.json version $pkg"; exit 1
+          fi
+          if [[ "$tag" == *-* ]]; then
+            echo "channel=preprod" >> "$GITHUB_OUTPUT"; echo "dist_tag=next" >> "$GITHUB_OUTPUT"; echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            git fetch origin main
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "::error::Prod tags must point at a commit on main"; exit 1
+            fi
+            echo "channel=prod" >> "$GITHUB_OUTPUT"; echo "dist_tag=latest" >> "$GITHUB_OUTPUT"; echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm (skipped if this version already exists, so re-runs are safe)
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already published; skipping."
+          else
+            npm publish --tag "${{ steps.meta.outputs.dist_tag }}"
+          fi
+
+      - name: GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME exists; skipping."; exit 0
+          fi
+          flags=(--generate-notes --title "$GITHUB_REF_NAME (${{ steps.meta.outputs.channel }})")
+          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}"

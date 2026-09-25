@@ -18,6 +18,7 @@ import { acquireLock, releaseLock, startHeartbeat } from './lib/lock.js'
 import { log } from './lib/log.js'
 import { createSender } from './lib/sender.js'
 import { INSTRUCTIONS, registerTools } from './lib/tools.js'
+import pkg from './package.json' with { type: 'json' }
 
 const DIR = process.env.WHATSAPP_MCP_DIR || join(homedir(), '.whatsapp-mcp')
 const AUTH = join(DIR, 'auth')
@@ -146,7 +147,7 @@ if (LOGIN) {
     conn.connect().catch((e) => log('error', 'connect_failed', { err: e.message }))
   }
 
-  const server = new McpServer({ name: 'walink', version: '2.0.0' }, { instructions: INSTRUCTIONS })
+  const server = new McpServer({ name: 'walink', version: pkg.version }, { instructions: INSTRUCTIONS })
   sender = createSender({
     contacts,
     conn,
