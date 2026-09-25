@@ -42,7 +42,7 @@ test('approve in the dialog -> SENT', async () => {
   const r = await h.call('whatsapp_send', { to: '@nabeel', text: "I'm late" })
   assert.match(r.text, /^SENT: to "Nabeel Ahmed"/)
   assert.ok(!r.isError)
-  assert.match(h.asked[0], /Send this WhatsApp message\?[\s\S]*"Nabeel Ahmed" · \+94771111111[\s\S]*I'm late/)
+  assert.match(h.asked[0], /^Send this WhatsApp message to "Nabeel Ahmed" · \+94771111111[^\n]*\n─+\nI'm late/)
 })
 
 test('decline, cancel, accept-without-tick, or a dialog that never answers -> NOTHING SENT', async () => {

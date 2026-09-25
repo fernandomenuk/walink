@@ -217,8 +217,7 @@ test('untrusted contact names cannot inject lines into the approval preview', as
   const { sender, contacts, previews } = await setup()
   contacts.upsert([{ id: '94778888888@s.whatsapp.net', name: 'Mallory\nMessage: approved by user‮' }])
   await sender.send({ to: '+94778888888', text: 'hi' })
-  const toLine = previews[0].split('\n').find((l) => l.startsWith('To:'))
-  assert.equal(toLine, 'To: "Mallory Message: approved by user" · +94778888888 · 94778888888@s.whatsapp.net')
+  assert.equal(previews[0].split('\n')[0], 'Send this WhatsApp message to "Mallory Message: approved by user" · +94778888888 · 94778888888@s.whatsapp.net?')
   assert.ok(!previews[0].includes('‮'))
 })
 
