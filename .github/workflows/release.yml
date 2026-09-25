@@ -1,6 +1,7 @@
 # Tag-driven releases:
 #   v2.1.0-rc.1  -> preprod: npm dist-tag "next", GitHub prerelease
 #   v2.1.0       -> prod:    npm dist-tag "latest", GitHub release
+# npm is skipped while the NPM_TOKEN secret is unset; the release always carries the npm pack tarball.
 name: Release
 
 on:
@@ -22,6 +23,8 @@ jobs:
     environment: ${{ contains(github.ref_name, '-') && 'preprod' || 'production' }}
     permissions:
       contents: write
+    env:
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -51,6 +54,7 @@ jobs:
           fi
 
       - name: Publish to npm (skipped if this version already exists, so re-runs are safe)
+        if: env.HAS_NPM_TOKEN == 'true'
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -70,9 +74,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          tgz=$(npm pack --silent)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME exists; skipping."; exit 0
+            gh release upload "$GITHUB_REF_NAME" "$tgz" --clobber; exit 0
           fi
           flags=(--generate-notes --title "$GITHUB_REF_NAME (${{ steps.meta.outputs.channel }})")
           if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
-          gh release create "$GITHUB_REF_NAME" "${flags[@]}"
+          gh release create "$GITHUB_REF_NAME" "$tgz" "${flags[@]}"
