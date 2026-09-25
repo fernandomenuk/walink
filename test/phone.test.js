@@ -44,7 +44,7 @@ test('ask: the question goes to your own chat; a reply with a number picks the o
   const { phone, sock, recv, journal, dir, previews } = await phoneSetup()
   const { result: p } = await asked(phone, sock, { question: 'Drop users.legacy_id?', options: ['yes, drop it', 'no, keep it'] })
   assert.equal(sock.sent[0].jid, SELF)
-  assert.equal(sock.sent[0].text, '🤖 proj asks:\nDrop users.legacy_id?\n\n1) yes, drop it\n2) no, keep it\nReply with a number or your own words.')
+  assert.equal(sock.sent[0].text, '🤖 walink · proj asks:\nDrop users.legacy_id?\n\n1) yes, drop it\n2) no, keep it\nReply with a number or your own words.')
   assert.equal(previews.length, 0, 'no approval dialog')
   await recv(incoming('2'))
   const r = await p

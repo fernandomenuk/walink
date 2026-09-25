@@ -2,9 +2,25 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { hashText } from '../lib/journal.js'
+import { SIGNATURES, withSignature } from '../lib/sender.js'
 import { setup, tick } from './helpers.js'
 
 const NABEEL = '94771111111@s.whatsapp.net'
+// What a text message to someone else looks like on the wire: the text plus its AI signature.
+const signed = (text) => withSignature(text, hashText(text))
+
+test('messages to others end with an AI signature, the same one for the same text; your own chat gets none', async () => {
+  const { sender, sockets, previews } = await setup()
+  await sender.send({ to: 'Sam', text: 'hi' })
+  await sender.send({ to: 'Samantha', text: 'hi' })
+  await sender.send({ to: 'me', text: 'note to self' })
+  const [a, b, self] = sockets[0].sent.map((m) => m.text)
+  assert.ok(SIGNATURES.some((sig) => a === `hi\n\n${sig}`), a)
+  assert.equal(a, b, 'deterministic, so a resend is byte-identical')
+  assert.ok(previews[0].includes(a), 'the dialog shows the signature too')
+  assert.equal(self, 'note to self')
+})
 const decline = async () => ({ ok: false, state: 'declined', reason: 'the approval dialog was declined' })
 
 test('happy path: SENT only after the server ack, preview shows exact recipient and text', async () => {
@@ -12,7 +28,7 @@ test('happy path: SENT only after the server ack, preview shows exact recipient 
   const r = await sender.send({ to: '@nabeel', text: "I'm late 😂\n  second line  " })
   assert.equal(r.status, 'SENT')
   assert.match(r.text, /^SENT: to "Nabeel Ahmed" · \+94771111111/)
-  assert.deepEqual(sockets[0].sent, [{ jid: NABEEL, text: "I'm late 😂\n  second line  ", messageId: 'MSG1' }])
+  assert.deepEqual(sockets[0].sent, [{ jid: NABEEL, text: signed("I'm late 😂\n  second line  "), messageId: 'MSG1' }])
   assert.ok(previews[0].includes("I'm late 😂\n  second line  "), 'exact text, whitespace preserved')
   assert.match(previews[0], /\+94771111111/)
   assert.match(previews[0], /starts or ends with spaces/)
@@ -179,7 +195,7 @@ test('concurrent sends go out one at a time in approval order', async () => {
     sender.send({ to: 'Samantha', text: 'three' }),
   ])
   assert.deepEqual(results.map((r) => r.status), ['SENT', 'SENT', 'SENT'])
-  assert.deepEqual(sockets[0].sent.map((m) => m.text), ['one', 'two', 'three'])
+  assert.deepEqual(sockets[0].sent.map((m) => m.text), ['one', 'two', 'three'].map(signed))
   assert.deepEqual(order, ['send MSG1', 'ack MSG1', 'send MSG2', 'ack MSG2', 'send MSG3', 'ack MSG3'])
 })
 
@@ -307,7 +323,7 @@ test('file: sent as a document with caption; the dialog leads with recipient, fi
   assert.equal(s.document.toString(), 'TARBALL-CONTENT-MARKER')
   assert.equal(s.fileName, 'walink-2.0.0.tgz')
   assert.equal(s.mimetype, 'application/gzip')
-  assert.equal(s.caption, 'rc.1 build')
+  assert.ok(SIGNATURES.some((sig) => s.caption === `rc.1 build\n\n${sig}`), s.caption)
   const lines = previews[0].split('\n')
   assert.match(lines[0], /^Send this WhatsApp file to "Sam"/)
   assert.equal(lines[1], 'File: walink-2.0.0.tgz (22 B, sent as a document)')
@@ -317,12 +333,14 @@ test('file: sent as a document with caption; the dialog leads with recipient, fi
   assert.deepEqual(sender.getMessage('MSG1'), { documentMessage: { fileName: 'walink-2.0.0.tgz', mediaKey: 'KEY' } })
 })
 
-test('file: no caption is fine', async () => {
+test('file: no caption is fine; to others it carries just the signature, to yourself nothing', async () => {
   const { sender, sockets, previews, dir } = await setup()
   const r = await sender.send({ to: 'Sam', file: aFile(dir) })
   assert.equal(r.status, 'SENT')
-  assert.equal(sockets[0].sent[0].caption, undefined)
-  assert.equal(previews[0].split('\n')[3], 'Caption: (none)')
+  assert.ok(SIGNATURES.includes(sockets[0].sent[0].caption))
+  assert.equal(previews[0].split('\n')[3], 'Caption:')
+  await sender.send({ to: 'me', file: aFile(dir) })
+  assert.equal(sockets[0].sent[1].caption, undefined)
 })
 
 test('file: changing it on disk after approval still sends the approved bytes', async () => {
@@ -393,7 +411,7 @@ test('own chat: no approval dialog, and notify heads the text with the session n
   const r = await sender.notify('Tests done: 77 passed.')
   assert.equal(r.status, 'SENT')
   assert.equal(previews.length, 0, 'no dialog')
-  assert.deepEqual(sockets[0].sent[0], { jid: '94770000000@s.whatsapp.net', text: '🤖 my-project\nTests done: 77 passed.', messageId: 'MSG1' })
+  assert.deepEqual(sockets[0].sent[0], { jid: '94770000000@s.whatsapp.net', text: '🤖 walink · my-project\nTests done: 77 passed.', messageId: 'MSG1' })
   assert.equal(journal.get(r.reqId).self, true)
   assert.equal(journal.get(r.reqId).kind, 'notify')
   assert.ok(sender.isOwnMessage('MSG1'), 'its own message id is known')

@@ -122,6 +122,8 @@ Your own WhatsApp chat is a two-way line to the Claude Code session that owns Wh
 
 ## Security model
 
+- **Recipients know an AI wrote it.** Every message (or file caption) to someone else ends with a short AI signature (`SIGNATURES` in `lib/sender.js`). It is picked by the message's fingerprint, not at random, so the dialog shows the exact text and a resend is byte-identical; the duplicate guards hash the text without it. Messages to your own chat carry the `🤖 walink · <folder>` header instead.
+
 - **Approval is enforced by the server.** Every send shows an MCP elicitation dialog built by the server, containing:
   - the recipient's name, phone and chat ID;
   - the exact text, with character and line counts;

@@ -173,7 +173,7 @@ if (LOGIN) {
     const req = handoverRequest(HANDOVER)
     if (!owner || releasing || !req || req.pid === process.pid || req.declined) return
     // A notification or question from another session must not cut off a question you're about to answer here.
-    if (req.soft && phone.waiting()) return declineHandover(HANDOVER, `the ${sessionLabel} session is waiting for your WhatsApp reply`)
+    if (req.soft && phone.waiting()) return declineHandover(HANDOVER, `the ${sessionLabel ?? 'other'} session is waiting for your WhatsApp reply`)
     releasing = true
     owner = false
     log('info', 'handover_requested', { byPid: req.pid })
@@ -229,7 +229,7 @@ if (LOGIN) {
   }
 
   // Names this session in phone messages: the folder Claude Code was started in.
-  const sessionLabel = (process.cwd() !== homedir() && basename(process.cwd())) || 'Claude Code'
+  const sessionLabel = (process.cwd() !== homedir() && basename(process.cwd())) || null
   // claude/channel: lets walink push your phone replies and "@claude" messages into the session.
   const server = new McpServer(
     { name: 'walink', version: pkg.version },
