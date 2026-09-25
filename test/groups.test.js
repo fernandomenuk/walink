@@ -7,7 +7,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { elicitationApprover } from '../lib/approval.js'
-import { createGroupStore, findMe, groupKey, resolveTarget } from '../lib/groups.js'
+import { createGroupStore, describeGroup, findMe, groupKey, resolveTarget } from '../lib/groups.js'
 import { createJournal } from '../lib/journal.js'
 import { INSTRUCTIONS, registerTools } from '../lib/tools.js'
 import { fakePrepare, setup, tmp } from './helpers.js'
@@ -294,4 +294,25 @@ test('MCP: only the user can enable a group; find, alias, resources and a send v
   assert.match((await h.call('whatsapp_group_disable', { group: '@hushchat' })).text, /^DISABLED/)
   assert.match((await h.call('whatsapp_send', { to: '@hushchat', text: 'again' })).text, /isn't enabled/)
   assert.match((await h.call('whatsapp_send', { to: G, text: 'raw' })).text, /raw group ID/)
+})
+
+test('keys drop emoji modifiers; "1 member" is singular; the list is sorted by name', async () => {
+  const g = createGroupStore(tmp())
+  const G3 = '120363000000000003@g.us'
+  g.syncAll(
+    {
+      [G]: meta({ subject: 'Zeta' }),
+      [G2]: meta({ id: G2, subject: '⚔️♟️ Chess Gang ⚔️', size: 1 }),
+      [G3]: meta({ id: G3, subject: 'Run Crew 🏃‍♂️🔥' }),
+    },
+    me,
+  )
+  assert.match(groupKey(g.get(G2)), /^chess-gang~[0-9a-f]{6}$/)
+  assert.match(groupKey(g.get(G3)), /^run-crew~[0-9a-f]{6}$/)
+  assert.match(describeGroup(g.get(G2)), / · 1 member$/)
+
+  const h = await mcp(() => ({ action: 'decline' }))
+  h.groups.syncAll({ [G]: meta({ subject: 'Zeta' }), [G2]: meta({ id: G2, subject: 'alpha' }) }, me)
+  const list = (await h.call('whatsapp_groups', {})).text
+  assert.ok(list.indexOf('"alpha"') < list.indexOf('"Zeta"'), list)
 })
