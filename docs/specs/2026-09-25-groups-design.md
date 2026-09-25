@@ -1,6 +1,7 @@
 # Design: groups and a unified target model for walink
 
-Status: design approved 2026-09-25; not implemented yet.
+Status: approved 2026-09-25; phases 1-4 implemented the same day (phase 5, images/videos and upload-once, is still future work).
+Implementation notes: group aliases stay plain `alias -> jid` strings (the rename warning compares against the name at enable time); a group key matches on its hash only, so it survives renames.
 
 ## Context
 walink sends only to individuals today. Groups are refused everywhere (`isAllowedJid` in `lib/contacts.js:8`).

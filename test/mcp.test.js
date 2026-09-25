@@ -91,7 +91,7 @@ test('status, find_contact, set_alias and resources', async () => {
   const status = (await h.call('whatsapp_status', {})).text
   assert.match(status, /this Claude Code session owns WhatsApp/)
   assert.match(status, /Usable for sending: yes/)
-  assert.match((await h.call('whatsapp_find_contact', { query: 'john' })).text, /2 matches/)
+  assert.match((await h.call('whatsapp_find_contact', { query: 'john' })).text, /2 contacts match/)
   assert.match((await h.call('whatsapp_find_contact', { query: 'sam' })).text, /Also partly matches: "Samantha"/)
   assert.match((await h.call('whatsapp_set_alias', { alias: '@js', to: 'John Smith' })).text, /@js -> "John Smith"/)
   assert.match((await h.call('whatsapp_set_alias', { alias: '@js', to: 'Sam' })).text, /already points to/)

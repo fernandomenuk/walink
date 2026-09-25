@@ -28,14 +28,26 @@ From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add w
 | --- | --- |
 | `whatsapp_send` | Send text, or a file as a document (`to`, `text`, optional `file` absolute path up to 100 MB, optional `resend_of` after an unknown outcome) |
 | `whatsapp_status` | Connection, session owner, approval support, unknown outcomes |
-| `whatsapp_find_contact` | Look up a name, alias or number |
+| `whatsapp_find` (also `whatsapp_find_contact`) | Look up a contact (name, alias, number) or a group (name). Groups come back with their `group:<key>` reference |
+| `whatsapp_groups` | List your groups, enabled ones first |
+| `whatsapp_group_enable` / `whatsapp_group_disable` | Allow or stop sends to a group. Enabling shows you a dialog; Claude can't do it alone |
 | `whatsapp_notify_me` | Notify you in your own chat (no dialog) |
 | `whatsapp_ask_me` | Ask you in your own chat and wait for the reply (`question`, `options`, `wait_minutes`, `wait_for`) |
-| `whatsapp_set_alias` | Remember `@name` → contact (`replace: true` to repoint) |
+| `whatsapp_set_alias` | Remember `@name` → a contact, or a group (`to: "group:<key>"`). `replace: true` repoints |
 
 Contacts are also listed as `@walink:wa://name` resources.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the state machines, failure semantics, recovery and security model.
+
+## Groups
+
+Groups are opt-in and stricter than people:
+
+1. **Enable a group once.** Ask Claude to "enable the HushChat Team group": it finds the group and asks you in a dialog ("Allow Claude to send to WhatsApp GROUP …?"). Claude cannot enable a group by itself.
+2. **Name it explicitly.** Claude sends to a group only by its reference (`group:hushchat-team~3fa9c1`, from `whatsapp_find` / `whatsapp_groups`) or an alias you set ("@hushchat"). A plain name never picks a group, and raw `…@g.us` IDs are refused.
+3. **Every send shows a GROUP dialog:** `⚠ Send this message to WhatsApp GROUP "HushChat Team" · 14 members?` and "Everyone in the group will see this." For groups over 50 members you also type the group's name.
+
+Before each group send walink looks the group up live: it refuses if you left, the group is gone, only admins can post and you aren't one, or it's a community (post in its announcements group). Files go to groups the same way as to people ("send the latest APK to @hushchat"): Claude finds the file, the dialog shows its name, size and path.
 
 ## Phone channel
 

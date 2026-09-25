@@ -64,7 +64,7 @@ test('JID allowlist refuses groups, broadcasts, newsletters and junk', () => {
   assert.equal(isAllowedJid('94771111111@s.whatsapp.net'), true)
   assert.equal(isAllowedJid('123456789012345@lid'), true)
   assert.equal(r('123456789012345@lid').match.name, 'Lid Friend')
-  assert.match(r('@grp', { grp: '1203@g.us' }).error, /not a personal chat/)
+  assert.match(r('@grp', { grp: '1203@g.us' }).error, /raw group ID/)
 })
 
 test('unicode: NFKC, case, emoji, Sinhala', () => {
@@ -104,7 +104,7 @@ test('alias store: validation, no silent overwrite, atomic persistence', () => {
   assert.match(s.setAlias('@nab', 'Sam').error, /already points to/)
   assert.equal(s.setAlias('@nab', 'Sam', { replace: true }).previous.name, 'Nabeel Ahmed')
   assert.match(s.setAlias('@x', 'John').error, /ambiguous/)
-  assert.match(s.setAlias('@g', '1203@g.us').error, /not a personal chat/)
+  assert.match(s.setAlias('@g', '1203@g.us').error, /raw group ID/)
   assert.match(s.setAlias('bad alias!', 'Sam').error, /not a valid alias/)
   assert.match(s.setAlias('__proto__', 'Sam').error, /not a valid alias/)
   assert.deepEqual(JSON.parse(readFileSync(join(dir, 'aliases.json'), 'utf8')), { nab: '94774444444@s.whatsapp.net' })

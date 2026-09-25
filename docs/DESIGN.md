@@ -8,6 +8,7 @@ One rule outranks everything else: **never send to the wrong person, never send 
 | --- | --- |
 | `server.js` | Wiring, session ownership, `login` mode, shutdown |
 | `lib/connection.js` | Baileys socket state machine, reconnect policy, server-ack tracking, existence checks |
+| `lib/groups.js` | Group store (metadata only), sync from events and full fetches, group keys, `resolveTarget` |
 | `lib/contacts.js` | Contact/alias store, conservative resolver, phone/Unicode normalization, JID allowlist, resource keys |
 | `lib/approval.js` | Approval preview text + MCP elicitation (the human-approval boundary) |
 | `lib/sender.js` | One send end to end, serial queue, rate limit |
@@ -90,7 +91,7 @@ stateDiagram-v2
 - **Read once, before the dialog.** The bytes are held in memory and fingerprinted (SHA-256). Those bytes are what is sent, so changing the file on disk after approval changes nothing.
 - **The dialog** opens with the recipient, the file name and size, and the full real path, then the caption. It warns (⚠) about secret-looking paths (`.ssh`, `.aws`, `.env*`, `*.pem`, `id_*`, `credentials*`, `~/.whatsapp-mcp`, and similar), links, files outside the home folder, and names containing control or bidi characters. Any file can be sent: the user is the gate.
 - **Journal:** the `pending` line records `file: { name, size, sha256 }`, never the path or the contents. The duplicate and unknown-outcome guards key on the caption plus the file's fingerprint, so a blind resend of the same file after `OUTCOME UNKNOWN` is refused like text.
-- `SENT` still means the server ack for the message. An upload failure is reported as `OUTCOME UNKNOWN`, like any error after the handoff to the socket.
+- `SENT` still means the server ack for the message. The upload runs before the message is relayed, so an upload failure (or a crash during it) is a certain `NOT SENT` and a retry is allowed; errors after the relay starts are `OUTCOME UNKNOWN` (see "Media: upload, then relay").
 
 ## Phone channel
 
@@ -106,6 +107,24 @@ Your own WhatsApp chat is a two-way line to the Claude Code session that owns Wh
 - **Acknowledgements:** walink reacts ✅ to an answer it delivered and 👀 to an `@claude` message it pushed. A swipe-reply to a closed question, or to another live session's question, gets a short notice instead.
 - **Journal:** questions are records (`Q1`, `Q2`, …) with the question's message id, owner pid and label, and expiry. Answers record the reply's id and length, never its text.
 - **Sessions:** only the owner has the socket, so only the owner receives. A follower's notification or question takes over with a *soft* request; the owner declines it while one of its questions is being waited on, and the follower gets `NOTHING SENT` with the reason. A dialog-approved send (a *hard* request) always proceeds and ends the old owner's waits with a clear reason.
+
+## Groups
+
+Full design: `docs/specs/2026-09-25-groups-design.md`.
+
+- **Identity:** a group's ID (`…@g.us`) never changes; names do. walink keys everything on the ID. A group key is `<name-slug>~<6 hex of sha256(ID)>`, and only the hash is matched, so a key from before a rename still reaches the same group and can never reach another.
+- **Sync:** a full `groupFetchAllParticipating` on every owner connect (known groups missing from it become `left`), plus `groups.update` (renames, settings) and `group-participants.update` (our own removal is detected against both our phone-number ID and LID; Baileys' own check misses PN groups). A deleted group emits nothing, so the live lookup before each send is the real check.
+- **Enabled state** lives in `groups.json`, written read-modify-write so two sessions don't overwrite each other; reads pick up the other session's writes by file mtime.
+
+### Media: upload, then relay
+
+A document is built and uploaded first (`generateWAMessage`), and only then relayed. The journal records `uploading` before the upload and `sending` before the relay:
+
+```
+uploading --upload error or crash--> failed      certain: no message was sent; retrying is allowed
+    |
+sending   --ack--> sent | --error ack--> failed | --timeout/close/crash--> unknown
+```
 
 ## Recovery
 
@@ -130,7 +149,8 @@ Your own WhatsApp chat is a two-way line to the Claude Code session that owns Wh
   - any warnings.
 
   Only `accept` with **Send** ticked sends. The model can't answer this dialog, and no tool argument can bypass it. A client without elicitation can't send at all.
-- **Recipients** must be 1:1 chats (`<digits>@s.whatsapp.net` or `<digits>@lid`). Groups, broadcasts, newsletters and other domains are refused, including through aliases and raw IDs.
+- **Recipients** are 1:1 chats (`<digits>@s.whatsapp.net` or `<digits>@lid`) or **enabled groups reached by an explicit reference** (`group:<key>` or an alias). Raw `@g.us`, broadcasts, newsletters and other domains are refused, including through aliases and raw IDs. A plain name never resolves to a group.
+- **Groups are opt-in.** Only `whatsapp_group_enable`, through a dialog the model cannot answer, makes a group sendable. Each group send re-fetches the group live (membership, admin-only, community), shows a GROUP dialog with the name, member count and "everyone will see this", and above 50 members requires typing the name. The send uses exactly the metadata shown (Baileys `cachedGroupMetadata`). `groups.json` stores metadata only, never member lists.
   - Phone numbers are checked with `onWhatsApp`.
   - A LID is mapped to its phone number when possible and then checked. Otherwise it must come from WhatsApp's own contact sync, and the dialog warns that no phone number is known. An unknown LID with no phone mapping is refused.
 - **Untrusted text:** contact names are stripped of control and bidi characters, truncated, and quoted wherever they are shown. Resource cards say their content is data. Prompt injection can at most cause a request, and a human still has to approve the exact recipient and text.

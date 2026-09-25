@@ -29,7 +29,7 @@ Last updated 2026-09-25, at the end of the second session. Items marked **TODO**
 - **Safety:**
   - `SENT` only on WhatsApp's server ack, with `OUTCOME UNKNOWN` otherwise.
   - Blind resends are refused.
-  - Groups and broadcasts are blocked.
+  - Groups only when you enabled them (dialog), only by `group:<key>` or an alias, with a GROUP dialog on every send (type the name above 50 members). Raw `@g.us`, broadcasts and newsletters are refused.
   - Rate limits: at least 1.5s between sends, at most 15 per minute.
   - Forwarded messages are never read as input.
   - Old messages are never replayed.
@@ -64,7 +64,7 @@ Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test 
 
 ## Decisions made (don't re-ask)
 - **No elicitation support** → refuse to send. There's no weaker fallback.
-- **Recipients:** individuals today. **Groups are planned but not built.** On 2026-09-25 the user reversed the earlier "groups stay blocked" decision, under stricter rules. See `docs/specs/2026-09-25-groups-design.md`:
+- **Recipients:** individuals and **opt-in groups** (implemented 2026-09-25, not yet live-tested). On 2026-09-25 the user reversed the earlier "groups stay blocked" decision, under stricter rules. See `docs/specs/2026-09-25-groups-design.md`:
   - Groups are opt-in: you enable each one in a dialog.
   - Groups resolve only through an explicit reference (`group:<key>`) or an alias; a plain name never matches a group.
   - For groups over 50 members, you type the group's name to confirm.

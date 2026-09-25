@@ -106,7 +106,7 @@ test('invalid inputs -> NOTHING SENT before any approval', async () => {
     [{ to: 'Sam', text: 'bad \ud800 surrogate' }, /invalid Unicode/],
     [{ to: 'Sam' }, /empty/],
     [{ to: '', text: 'hi' }, /empty/],
-    [{ to: '120363123@g.us', text: 'hi' }, /not a personal chat/],
+    [{ to: '120363123@g.us', text: 'hi' }, /raw group ID. Groups are reached only by a group reference/],
     [{ to: 'status@broadcast', text: 'hi' }, /not a personal chat/],
     [{ to: '0771111111', text: 'hi' }, /country code/],
     [{ to: 'John', text: 'hi' }, /matches 2 contacts; not guessing/],

@@ -6,13 +6,14 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import makeWASocket, { fetchLatestBaileysVersion, generateMessageIDV2, useMultiFileAuthState } from '@whiskeysockets/baileys'
+import makeWASocket, { fetchLatestBaileysVersion, generateMessageIDV2, generateWAMessage, useMultiFileAuthState } from '@whiskeysockets/baileys'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import qrcode from 'qrcode-terminal'
 import { elicitationApprover } from './lib/approval.js'
 import { createConnection } from './lib/connection.js'
 import { createContactStore } from './lib/contacts.js'
+import { createGroupStore, resolveTarget } from './lib/groups.js'
 import { createJournal } from './lib/journal.js'
 import { createPhone } from './lib/phone.js'
 import { acquireLock, clearHandover, declineHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
@@ -42,6 +43,7 @@ const baileysLogger = {
 }
 
 const contacts = createContactStore(DIR)
+const groups = createGroupStore(DIR)
 let sender = null
 let phone = null
 let version
@@ -55,6 +57,8 @@ const makeSocket = async (auth) => {
     syncFullHistory: false,
     // lets Baileys re-encrypt a message a recipient device failed to decrypt (same id, so never a duplicate)
     getMessage: async (key) => sender?.getMessage(key.id),
+    // Group sends use the metadata shown in the approval dialog, not a second lookup (lib/connection.js groupCache).
+    cachedGroupMetadata: async (jid) => conn.groupCache.get(jid),
   })
 }
 
@@ -85,6 +89,10 @@ const conn = createConnection({
   makeSocket,
   login: LOGIN,
   onMessages: (u) => phone?.onMessages(u),
+  onGroups: (e) => !LOGIN && handleGroupEvent(e),
+  // Media: build and upload first, relay second, so a failed upload is a certain "nothing was sent".
+  prepareMessage: (s, jid, content, msgId) =>
+    generateWAMessage(jid, content, { upload: s.waUploadToServer, userJid: s.user.id, messageId: msgId, logger: baileysLogger, mediaUploadTimeoutMs: 5 * 60_000 }),
   onContacts: (list) => {
     contacts.upsert(list)
     onSyncActivity()
@@ -94,7 +102,8 @@ const conn = createConnection({
     qrcode.generate(qr, { small: true })
     console.log('Scan with WhatsApp > Settings > Linked devices > Link a device')
   },
-  onOpen: () => LOGIN && waitForSync(),
+  // Every (re)connect of the owner refreshes the group list: deletions and removals have no reliable event.
+  onOpen: () => (LOGIN ? waitForSync() : syncGroups().catch((e) => log('warn', 'groups_sync_failed', { err: e.message }))),
   onTerminal: (code) => {
     if (!LOGIN) return
     // Dead or corrupt credentials: wipe them so a fresh QR code appears.
@@ -103,6 +112,26 @@ const conn = createConnection({
     shutdown(1)
   },
 })
+
+async function syncGroups() {
+  groups.syncAll(await conn.groupFetchAll(), conn.self())
+}
+
+// Renames, settings, joins and removals. Only the owner has a socket, so only the owner writes groups.json.
+function handleGroupEvent(e) {
+  try {
+    if (e.type === 'upsert') for (const m of e.items ?? []) groups.upsertMeta(m, conn.self())
+    else if (e.type === 'update') groups.applyUpdates(e.items)
+    else if (e.type === 'participants' && groups.applyParticipants(e.event, conn.self()) === 'refetch') {
+      conn
+        .groupMetadata(e.event.id)
+        .then((m) => groups.upsertMeta(m, conn.self()))
+        .catch((err) => log('warn', 'group_refetch_failed', { err: err.message }))
+    }
+  } catch (err) {
+    log('error', 'group_event_failed', { err: err.message })
+  }
+}
 
 // Login mode: exit once contact events go quiet for 20s after connecting.
 function waitForSync() {
@@ -148,6 +177,7 @@ if (LOGIN) {
     holder = null
     stopHeartbeat = startHeartbeat(LOCK)
     contacts.reload()
+    groups.reload()
     journal = createJournal(JOURNAL).load()
     log('info', 'session_owner', { pid: process.pid })
     conn.connect().catch((e) => log('error', 'connect_failed', { err: e.message }))
@@ -235,12 +265,15 @@ if (LOGIN) {
     { name: 'walink', version: pkg.version },
     { instructions: INSTRUCTIONS, capabilities: { experimental: { 'claude/channel': {} } } },
   )
+  const approve = elicitationApprover(server)
   sender = createSender({
     contacts,
     conn,
     role,
     getJournal: () => journal,
-    approve: elicitationApprover(server),
+    approve,
+    resolveTo: (to) => resolveTarget(to, contacts, groups),
+    groups,
     takeOver,
     selfJid,
     sessionLabel,
@@ -260,6 +293,9 @@ if (LOGIN) {
     conn,
     sender,
     phone,
+    groups,
+    approve,
+    syncGroups,
     sessionLabel,
     role,
     getJournal: () => journal,
