@@ -70,6 +70,12 @@ jobs:
             npm publish --tag "${{ steps.meta.outputs.dist_tag }}"
           fi
 
+      - uses: actions/setup-node@v5 # repoint npm's registry and auth at GitHub Packages
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@fernandomenuk'
+
       - name: Publish to GitHub Packages (skipped if this version already exists)
         shell: bash
         env:
@@ -77,7 +83,6 @@ jobs:
         run: |
           set -euo pipefail
           reg=https://npm.pkg.github.com
-          echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" >> "$NPM_CONFIG_USERCONFIG"
           name=$(node -p "require('./package.json').name")
           version=$(node -p "require('./package.json').version")
           if npm view "$name@$version" version --registry "$reg" >/dev/null 2>&1; then
