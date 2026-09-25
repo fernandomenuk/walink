@@ -14,6 +14,7 @@ import { elicitationApprover } from './lib/approval.js'
 import { createConnection } from './lib/connection.js'
 import { createContactStore } from './lib/contacts.js'
 import { createJournal } from './lib/journal.js'
+import { createPhone } from './lib/phone.js'
 import { acquireLock, clearHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
 import { log } from './lib/log.js'
 import { createSender } from './lib/sender.js'
@@ -42,6 +43,7 @@ const baileysLogger = {
 
 const contacts = createContactStore(DIR)
 let sender = null
+let phone = null
 let version
 const makeSocket = async (auth) => {
   version ??= (await fetchLatestBaileysVersion().catch(() => ({}))).version
@@ -82,6 +84,7 @@ const conn = createConnection({
   loadAuth: useMultiFileAuthState,
   makeSocket,
   login: LOGIN,
+  onMessages: (u) => phone?.onMessages(u),
   onContacts: (list) => {
     contacts.upsert(list)
     onSyncActivity()
@@ -130,6 +133,7 @@ if (LOGIN) {
   let journal = null
   let watch = null
   let poll = null
+  let ownerSince = 0
   const role = () => ({ owner, holder })
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -140,6 +144,7 @@ if (LOGIN) {
       return
     }
     owner = true
+    ownerSince = Date.now()
     holder = null
     stopHeartbeat = startHeartbeat(LOCK)
     contacts.reload()
@@ -170,6 +175,7 @@ if (LOGIN) {
     releasing = true
     owner = false
     log('info', 'handover_requested', { byPid: req.pid })
+    phone.endWaits(`WhatsApp moved to another Claude Code session (pid ${req.pid})`)
     await sender.idle()
     clearInterval(watch)
     conn.stop()
@@ -218,7 +224,13 @@ if (LOGIN) {
     }
   }
 
-  const server = new McpServer({ name: 'walink', version: pkg.version }, { instructions: INSTRUCTIONS })
+  // Names this session in phone messages: the folder Claude Code was started in.
+  const sessionLabel = (process.cwd() !== homedir() && basename(process.cwd())) || 'Claude Code'
+  // claude/channel: lets walink push your phone replies and "@claude" messages into the session.
+  const server = new McpServer(
+    { name: 'walink', version: pkg.version },
+    { instructions: INSTRUCTIONS, capabilities: { experimental: { 'claude/channel': {} } } },
+  )
   sender = createSender({
     contacts,
     conn,
@@ -227,14 +239,24 @@ if (LOGIN) {
     approve: elicitationApprover(server),
     takeOver,
     selfJid,
-    // Names this session in phone notifications: the folder Claude Code was started in.
-    sessionLabel: (process.cwd() !== homedir() && basename(process.cwd())) || 'Claude Code',
+    sessionLabel,
     newMsgId: () => generateMessageIDV2(conn.me()),
+  })
+  phone = createPhone({
+    conn,
+    sender,
+    getJournal: () => journal,
+    sessionLabel,
+    ownerSince: () => ownerSince,
+    pushChannel: (params) =>
+      server.server.notification({ method: 'notifications/claude/channel', params }).catch((e) => log('warn', 'channel_push_failed', { err: e.message })),
   })
   registerTools(server, {
     contacts,
     conn,
     sender,
+    phone,
+    sessionLabel,
     role,
     getJournal: () => journal,
     elicitationSupported: () => Boolean(server.server.getClientCapabilities()?.elicitation),

@@ -29,12 +29,16 @@ export function fakeSocket({ behavior = () => 'ack', missing = [], lidMap = {} }
   const s = {
     ev: new EventEmitter(),
     ws: new EventEmitter(),
-    user: { id: '94770000000:7@s.whatsapp.net' },
+    user: { id: '94770000000:7@s.whatsapp.net', lid: '11111111111111:7@lid' },
     sent: [],
+    reactions: [], // { jid, text, key } from best-effort sendRaw
+    edits: [], // { jid, text, key }
     ended: false,
     onWhatsApp: async (jid) => [{ jid, exists: !missing.includes(jid) }],
     signalRepository: { lidMapping: { getPNForLID: async (lid) => lidMap[lid] ?? null } },
-    async sendMessage(jid, content, { messageId }) {
+    async sendMessage(jid, content, { messageId } = {}) {
+      if (content.react) return void s.reactions.push({ jid, text: content.react.text, key: content.react.key })
+      if (content.edit) return void s.edits.push({ jid, text: content.text, key: content.edit })
       s.sent.push(content.document ? { jid, ...content, messageId } : { jid, text: content.text, messageId })
       const b = behavior(messageId, s)
       if (b === 'throw') throw new Error('Connection Closed')
