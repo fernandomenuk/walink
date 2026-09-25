@@ -15,7 +15,7 @@ Last updated 2026-09-25, late in the second session (after the rc.4 release). It
 | Audit doc | "WhatsApp MCP Review Answers" (Claude Docs): https://claude.ai/code/artifact/99dbc6e0-1fc2-473e-8e76-d78e313afa63. It covers the **old** v1 code. |
 
 ## What walink does now
-- **Send text or files** (`whatsapp_send`) to any individual contact. Each send shows a server-enforced approval dialog, where you tick **Send** and then Accept.
+- **Send text or files** (`whatsapp_send`) to any individual contact, or to a group you enabled (see Safety). Each send shows a server-enforced approval dialog, where you tick **Send** and then Accept.
   - The dialog leads with the recipient and the text, or the file's name, size and path, because Claude Code collapses it to its first lines.
   - Messages to other people end with `🤖 This message is written by Claude`.
 - **Your own chat needs no dialog**: `me`, `whatsapp_notify_me`, `whatsapp_ask_me`. Those messages are headed `🤖 walink · <folder>`.
@@ -73,7 +73,7 @@ Tests: **113** (`npm test`); 112 pass and 1 is skipped on Windows (a symlink tes
 
 ## Decisions made (don't re-ask)
 - **No elicitation support** → refuse to send. There's no weaker fallback.
-- **Recipients:** individuals and **opt-in groups** (implemented 2026-09-25, not yet live-tested). On 2026-09-25 the user reversed the earlier "groups stay blocked" decision, under stricter rules. See `docs/specs/2026-09-25-groups-design.md`:
+- **Recipients:** individuals and **opt-in groups** (implemented and live-tested with text on 2026-09-25; documents and refusals to groups still untested). On 2026-09-25 the user reversed the earlier "groups stay blocked" decision, under stricter rules. See `docs/specs/2026-09-25-groups-design.md`:
   - Groups are opt-in: you enable each one in a dialog.
   - Groups resolve only through an explicit reference (`group:<key>`) or an alias; a plain name never matches a group.
   - For groups over 50 members, you type the group's name to confirm.
