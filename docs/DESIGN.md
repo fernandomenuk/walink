@@ -141,7 +141,7 @@ sending   --ack--> sent | --error ack--> failed | --timeout/close/crash--> unkno
 
 ## Security model
 
-- **Recipients know an AI wrote it.** Every message (or file caption) to someone else ends with a short AI signature (`SIGNATURES` in `lib/sender.js`). It is picked by the message's fingerprint, not at random, so the dialog shows the exact text and a resend is byte-identical; the duplicate guards hash the text without it. Messages to your own chat carry the `🤖 walink · <folder>` header instead.
+- **Recipients know Claude wrote it.** Every message (or file caption) to someone else ends with one fixed line, `🤖 This message is written by Claude` (`SIGNATURE` in `lib/sender.js`). The dialog shows it, a resend is byte-identical, and the duplicate guards hash the text without it. Messages to your own chat carry the `🤖 walink · <folder>` header instead.
 
 - **Approval is enforced by the server.** Every send shows an MCP elicitation dialog built by the server, containing:
   - the recipient's name, phone and chat ID;

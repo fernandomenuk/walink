@@ -17,7 +17,7 @@ Last updated 2026-09-25, at the end of the second session. Items marked **TODO**
 ## What walink does now
 - **Send text or files** (`whatsapp_send`) to any individual contact. Each send shows a server-enforced approval dialog, where you tick **Send** and then Accept.
   - The dialog leads with the recipient and the text, or the file's name, size and path, because Claude Code collapses it to its first lines.
-  - Messages to other people end with an **AI signature**, for example `— sent by my AI 🤖`. There are four variants, picked by the message's fingerprint.
+  - Messages to other people end with `🤖 This message is written by Claude`.
 - **Your own chat needs no dialog**: `me`, `whatsapp_notify_me`, `whatsapp_ask_me`. Those messages are headed `🤖 walink · <folder>`.
 - **Phone channel:**
   - `whatsapp_ask_me` asks you on WhatsApp and waits (up to 25 min per call). Reply with a number or text, and swipe-reply if several questions are open. You'll see ✅.
@@ -75,7 +75,7 @@ Tests: **95** (`npm test`); 94 pass and 1 is skipped on Windows (a symlink test 
 - **Remote approval** of sends to *other people* from the phone: **not now**.
 - **Phone → Claude:** only `@claude …` messages, plus replies to open questions. Other self-notes stay private.
 - **Files:** any file, always as a document, through `file` on `whatsapp_send`. The user is the gate, with warnings in the dialog.
-- **AI signature** on every message to others, a set of simple lines. Header on your own chat: `🤖 walink · <folder>`.
+- **Signature** on every message to others: one fixed line, `🤖 This message is written by Claude` (the user replaced the rotating lines on 2026-09-25). Header on your own chat: `🤖 walink · <folder>`.
 - **Tool names** keep the `whatsapp_` prefix; the server name is `walink`.
 - **Publishing:**
   - Releases are triggered by tags.

@@ -17,7 +17,7 @@ From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add w
 
 ## Use
 
-"tell @nabeel I'm 15 minutes late": Claude calls `whatsapp_send`, and you get a dialog showing the exact recipient and text. Tick **Send** and accept to send it. "send @akka ~/Downloads/report.pdf" works the same way: the file goes as a document, and the dialog shows its name, size and full path. Messages to other people end with a short line saying an AI typed them (for example "— sent by my AI 🤖"), and the dialog shows it. The reply always starts with one of:
+"tell @nabeel I'm 15 minutes late": Claude calls `whatsapp_send`, and you get a dialog showing the exact recipient and text. Tick **Send** and accept to send it. "send @akka ~/Downloads/report.pdf" works the same way: the file goes as a document, and the dialog shows its name, size and full path. Messages to other people end with "🤖 This message is written by Claude", and the dialog shows it. The reply always starts with one of:
 
 - `SENT`: WhatsApp's server accepted the message.
 - `NOTHING SENT`: nothing left this machine. The reason follows.

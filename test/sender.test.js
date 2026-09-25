@@ -2,22 +2,21 @@ import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { hashText } from '../lib/journal.js'
-import { SIGNATURES, withSignature } from '../lib/sender.js'
+import { SIGNATURE, withSignature } from '../lib/sender.js'
 import { setup, tick } from './helpers.js'
 
 const NABEEL = '94771111111@s.whatsapp.net'
 // What a text message to someone else looks like on the wire: the text plus its AI signature.
-const signed = (text) => withSignature(text, hashText(text))
+const signed = (text) => withSignature(text)
 
-test('messages to others end with an AI signature, the same one for the same text; your own chat gets none', async () => {
+test('messages to others end with the Claude signature; your own chat gets none', async () => {
   const { sender, sockets, previews } = await setup()
   await sender.send({ to: 'Sam', text: 'hi' })
   await sender.send({ to: 'Samantha', text: 'hi' })
   await sender.send({ to: 'me', text: 'note to self' })
   const [a, b, self] = sockets[0].sent.map((m) => m.text)
-  assert.ok(SIGNATURES.some((sig) => a === `hi\n\n${sig}`), a)
-  assert.equal(a, b, 'deterministic, so a resend is byte-identical')
+  assert.equal(a, 'hi\n\n🤖 This message is written by Claude')
+  assert.equal(a, b, 'the same text is byte-identical every time')
   assert.ok(previews[0].includes(a), 'the dialog shows the signature too')
   assert.equal(self, 'note to self')
 })
@@ -323,7 +322,7 @@ test('file: sent as a document with caption; the dialog leads with recipient, fi
   assert.equal(s.document.toString(), 'TARBALL-CONTENT-MARKER')
   assert.equal(s.fileName, 'walink-2.0.0.tgz')
   assert.equal(s.mimetype, 'application/gzip')
-  assert.ok(SIGNATURES.some((sig) => s.caption === `rc.1 build\n\n${sig}`), s.caption)
+  assert.equal(s.caption, `rc.1 build\n\n${SIGNATURE}`)
   const lines = previews[0].split('\n')
   assert.match(lines[0], /^Send this WhatsApp file to "Sam"/)
   assert.equal(lines[1], 'File: walink-2.0.0.tgz (22 B, sent as a document)')
@@ -337,7 +336,7 @@ test('file: no caption is fine; to others it carries just the signature, to your
   const { sender, sockets, previews, dir } = await setup()
   const r = await sender.send({ to: 'Sam', file: aFile(dir) })
   assert.equal(r.status, 'SENT')
-  assert.ok(SIGNATURES.includes(sockets[0].sent[0].caption))
+  assert.equal(sockets[0].sent[0].caption, SIGNATURE)
   assert.equal(previews[0].split('\n')[3], 'Caption:')
   await sender.send({ to: 'me', file: aFile(dir) })
   assert.equal(sockets[0].sent[1].caption, undefined)
