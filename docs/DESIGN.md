@@ -11,6 +11,7 @@ One rule outranks everything else: **never send to the wrong person, never send 
 | `lib/contacts.js` | Contact/alias store, conservative resolver, phone/Unicode normalization, JID allowlist, resource keys |
 | `lib/approval.js` | Approval preview text + MCP elicitation (the human-approval boundary) |
 | `lib/sender.js` | One send end to end, serial queue, rate limit |
+| `lib/file.js` | Reads a file to send (once), size limit, MIME type, secret-path warnings |
 | `lib/journal.js` | Append-only `sends.jsonl`, crash recovery, duplicate lookups |
 | `lib/lock.js` | Single owner of `auth/` across processes |
 | `lib/persist.js` | Atomic JSON writes, quarantine of corrupt files, fsync'd JSONL |
@@ -80,6 +81,15 @@ stateDiagram-v2
 - **Handover on approval:** when the user approves a follower's send, the follower writes `auth.lock.handover` (`{pid, ts}`). The owner checks for it every second, stops accepting sends (queued ones return `NOTHING SENT`), waits for in-flight sends to finish so the handover never creates an `OUTCOME UNKNOWN`, closes its socket, releases the lock and becomes a follower. The requester takes the lock, connects, runs the existence and duplicate checks it skipped, and sends without a second dialog. It gives up after 30s (hung owner, or another session won the race) with `NOTHING SENT`, and always removes its request file. Requests from dead pids are ignored.
 - Followers poll every 10s and take over automatically when the owner dies (not while another live session's handover request is pending). On takeover a follower reloads contacts and aliases, then runs journal recovery.
 - The server exits when stdin closes, so an orphan can't keep holding the session.
+
+## Files
+
+- `whatsapp_send` takes an optional `file` (an absolute path). The file goes as a WhatsApp **document**, never recompressed, and `text` becomes an optional caption.
+- **Refused before the dialog:** a relative path, a missing file, a folder, an empty file, or anything over 100 MB. Symlinks are resolved and the real target is what gets sent.
+- **Read once, before the dialog.** The bytes are held in memory and fingerprinted (SHA-256). Those bytes are what is sent, so changing the file on disk after approval changes nothing.
+- **The dialog** opens with the recipient, the file name and size, and the full real path, then the caption. It warns (⚠) about secret-looking paths (`.ssh`, `.aws`, `.env*`, `*.pem`, `id_*`, `credentials*`, `~/.whatsapp-mcp`, and similar), links, files outside the home folder, and names containing control or bidi characters. Any file can be sent: the user is the gate.
+- **Journal:** the `pending` line records `file: { name, size, sha256 }`, never the path or the contents. The duplicate and unknown-outcome guards key on the caption plus the file's fingerprint, so a blind resend of the same file after `OUTCOME UNKNOWN` is refused like text.
+- `SENT` still means the server ack for the message. An upload failure is reported as `OUTCOME UNKNOWN`, like any error after the handoff to the socket.
 
 ## Recovery
 

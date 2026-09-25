@@ -52,10 +52,7 @@ const makeSocket = async (auth) => {
     markOnlineOnConnect: false,
     syncFullHistory: false,
     // lets Baileys re-encrypt a message a recipient device failed to decrypt (same id, so never a duplicate)
-    getMessage: async (key) => {
-      const text = sender?.getMessage(key.id)
-      return text ? { conversation: text } : undefined
-    },
+    getMessage: async (key) => sender?.getMessage(key.id),
   })
 }
 

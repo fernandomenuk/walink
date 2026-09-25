@@ -11,16 +11,16 @@ test('backoff: exponential, capped at 60s, ±20% jitter', () => {
   assert.equal(backoffMs(0, () => 1), 1200)
 })
 
-test('sendText: sent only on the server ack', async () => {
+test('sendContent: sent only on the server ack', async () => {
   const { conn } = await connected()
-  assert.deepEqual(await conn.sendText('1@s.whatsapp.net', 'hi', 'M1'), { outcome: 'sent' })
+  assert.deepEqual(await conn.sendContent('1@s.whatsapp.net', { text: 'hi' }, 'M1'), { outcome: 'sent' })
 })
 
-test('sendText: error ack -> failed; no ack -> unknown; throw -> unknown; close -> unknown', async () => {
+test('sendContent: error ack -> failed; no ack -> unknown; throw -> unknown; close -> unknown', async () => {
   const cases = { nack: 'failed', hang: 'unknown', throw: 'unknown', close: 'unknown' }
   for (const [behavior, outcome] of Object.entries(cases)) {
     const { conn } = await connected({ behavior: () => behavior }, { ackTimeoutMs: 50 })
-    const r = await conn.sendText('1@s.whatsapp.net', 'hi', 'M1')
+    const r = await conn.sendContent('1@s.whatsapp.net', { text: 'hi' }, 'M1')
     assert.equal(r.outcome, outcome, behavior)
     conn.stop()
   }
@@ -76,7 +76,7 @@ test('single-flight: concurrent connects and duplicate/stale closes make one soc
 
 test('a close mid-send resolves the pending send as unknown', async () => {
   const { conn, sockets } = await connected({ behavior: () => 'hang' }, { ackTimeoutMs: 5000 })
-  const p = conn.sendText('1@s.whatsapp.net', 'hi', 'M1')
+  const p = conn.sendContent('1@s.whatsapp.net', { text: 'hi' }, 'M1')
   await tick(5)
   sockets[0].close(408)
   const r = await p

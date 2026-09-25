@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { setup, tick } from './helpers.js'
 
@@ -284,4 +286,101 @@ test('follower: checks skipped before the dialog still run after taking over', a
   assert.equal(r.status, 'NOTHING SENT')
   assert.match(r.text, /approved and took over WhatsApp, but .*not on WhatsApp/)
   assert.equal(sockets[0].sent.length, 0)
+})
+
+// --- files ---
+
+function aFile(dir, name = 'walink-2.0.0.tgz', content = 'TARBALL-CONTENT-MARKER') {
+  const path = join(dir, name)
+  writeFileSync(path, content)
+  return path
+}
+
+test('file: sent as a document with caption; the dialog leads with recipient, file and path', async () => {
+  const { sender, sockets, journal, previews, dir } = await setup()
+  const path = aFile(dir)
+  const r = await sender.send({ to: 'Sam', file: path, text: 'rc.1 build' })
+  assert.equal(r.status, 'SENT')
+  assert.match(r.text, /^SENT: file "walink-2\.0\.0\.tgz" to "Sam"/)
+  const [s] = sockets[0].sent
+  assert.equal(s.document.toString(), 'TARBALL-CONTENT-MARKER')
+  assert.equal(s.fileName, 'walink-2.0.0.tgz')
+  assert.equal(s.mimetype, 'application/gzip')
+  assert.equal(s.caption, 'rc.1 build')
+  const lines = previews[0].split('\n')
+  assert.match(lines[0], /^Send this WhatsApp file to "Sam"/)
+  assert.equal(lines[1], 'File: walink-2.0.0.tgz (22 B, sent as a document)')
+  assert.equal(lines[2], `Path: ${path}`)
+  assert.equal(lines[3], 'Caption:')
+  assert.equal(journal.get(r.reqId).state, 'sent')
+  assert.deepEqual(sender.getMessage('MSG1'), { documentMessage: { fileName: 'walink-2.0.0.tgz', mediaKey: 'KEY' } })
+})
+
+test('file: no caption is fine', async () => {
+  const { sender, sockets, previews, dir } = await setup()
+  const r = await sender.send({ to: 'Sam', file: aFile(dir) })
+  assert.equal(r.status, 'SENT')
+  assert.equal(sockets[0].sent[0].caption, undefined)
+  assert.equal(previews[0].split('\n')[3], 'Caption: (none)')
+})
+
+test('file: changing it on disk after approval still sends the approved bytes', async () => {
+  let path
+  const { sender, sockets, dir } = await setup({
+    approve: async () => {
+      writeFileSync(path, 'SWAPPED')
+      return { ok: true }
+    },
+  })
+  path = aFile(dir)
+  assert.equal((await sender.send({ to: 'Sam', file: path })).status, 'SENT')
+  assert.equal(sockets[0].sent[0].document.toString(), 'TARBALL-CONTENT-MARKER')
+})
+
+test('file: bad paths are refused before any dialog', async () => {
+  const { sender, sockets, previews, dir } = await setup({ senderOpts: { maxFileBytes: 10 } })
+  for (const [file, re] of [
+    ['relative.txt', /not an absolute path/],
+    [dir, /not a regular file/],
+    [join(dir, 'missing.pdf'), /no file/],
+    [aFile(dir, 'big.bin', 'more than ten bytes'), /the limit is 10 B/],
+  ]) {
+    const r = await sender.send({ to: 'Sam', file })
+    assert.equal(r.status, 'NOTHING SENT')
+    assert.match(r.text, re)
+  }
+  assert.equal(previews.length, 0)
+  assert.equal(sockets[0].sent.length, 0)
+})
+
+test('file: the journal keeps name, size and fingerprint, never the path or contents', async () => {
+  const { sender, dir } = await setup()
+  const path = aFile(dir, 'private-report.pdf')
+  await sender.send({ to: 'Sam', file: path, text: 'here' })
+  const raw = readFileSync(join(dir, 'sends.jsonl'), 'utf8')
+  assert.ok(!raw.includes(JSON.stringify(dir).slice(1, -1)) && !raw.includes(dir), 'no path (raw or JSON-escaped)')
+  assert.ok(!raw.includes('TARBALL-CONTENT-MARKER'), 'no contents')
+  assert.match(raw, /"file":\{"name":"private-report\.pdf","size":22,"sha256":"[0-9a-f]{64}"\}/)
+})
+
+test('file: unknown outcome blocks a blind resend of the same file; resend_of allows it', async () => {
+  let behavior = 'hang'
+  const { sender, sockets, dir } = await setup({ sock: { behavior: () => behavior } })
+  const path = aFile(dir)
+  const first = await sender.send({ to: 'Sam', file: path })
+  assert.equal(first.status, 'OUTCOME UNKNOWN')
+  assert.equal((await sender.send({ to: 'Sam', file: path })).status, 'NOTHING SENT')
+  assert.equal((await sender.send({ to: 'Sam', file: path, text: 'different caption' })).status, 'OUTCOME UNKNOWN', 'caption + file is a different send')
+  behavior = 'ack'
+  assert.equal((await sender.send({ to: 'Sam', file: path, resend_of: first.reqId })).status, 'SENT')
+  assert.equal(sockets[0].sent.length, 3)
+})
+
+test('file: a follower shows the file with the takeover note, then sends after taking over', async () => {
+  const { sender, sockets, previews, calls, dir } = await followerSetup()
+  const r = await sender.send({ to: 'Sam', file: aFile(dir) })
+  assert.equal(r.status, 'SENT')
+  assert.equal(calls.length, 1)
+  assert.match(previews[0].split('\n')[0], /^Send this WhatsApp file to "Sam".*This moves WhatsApp here/)
+  assert.equal(sockets[0].sent[0].fileName, 'walink-2.0.0.tgz')
 })

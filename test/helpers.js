@@ -35,13 +35,14 @@ export function fakeSocket({ behavior = () => 'ack', missing = [], lidMap = {} }
     onWhatsApp: async (jid) => [{ jid, exists: !missing.includes(jid) }],
     signalRepository: { lidMapping: { getPNForLID: async (lid) => lidMap[lid] ?? null } },
     async sendMessage(jid, content, { messageId }) {
-      s.sent.push({ jid, text: content.text, messageId })
+      s.sent.push(content.document ? { jid, ...content, messageId } : { jid, text: content.text, messageId })
       const b = behavior(messageId, s)
       if (b === 'throw') throw new Error('Connection Closed')
       if (b === 'ack') setImmediate(() => s.ws.emit('CB:ack,class:message', { attrs: { id: messageId, class: 'message' } }))
       if (b === 'nack') setImmediate(() => s.ws.emit('CB:ack,class:message', { attrs: { id: messageId, error: '463' } }))
       if (b === 'close') setImmediate(() => s.close(428))
-      return { key: { id: messageId } }
+      const message = content.document ? { documentMessage: { fileName: content.fileName, mediaKey: 'KEY' } } : { conversation: content.text }
+      return { key: { id: messageId }, message }
     },
     end() {
       s.ended = true

@@ -17,7 +17,7 @@ From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add w
 
 ## Use
 
-"tell @nabeel I'm 15 minutes late": Claude calls `whatsapp_send`, and you get a dialog showing the exact recipient and text. Tick **Send** and accept to send it. The reply always starts with one of:
+"tell @nabeel I'm 15 minutes late": Claude calls `whatsapp_send`, and you get a dialog showing the exact recipient and text. Tick **Send** and accept to send it. "send @akka ~/Downloads/report.pdf" works the same way: the file goes as a document, and the dialog shows its name, size and full path. The reply always starts with one of:
 
 - `SENT`: WhatsApp's server accepted the message.
 - `NOTHING SENT`: nothing left this machine. The reason follows.
@@ -26,7 +26,7 @@ From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add w
 
 | Tool | Purpose |
 | --- | --- |
-| `whatsapp_send` | Send text (`to`, `text`, optional `resend_of` after an unknown outcome) |
+| `whatsapp_send` | Send text, or a file as a document (`to`, `text`, optional `file` absolute path up to 100 MB, optional `resend_of` after an unknown outcome) |
 | `whatsapp_status` | Connection, session owner, approval support, unknown outcomes |
 | `whatsapp_find_contact` | Look up a name, alias or number |
 | `whatsapp_set_alias` | Remember `@name` → contact (`replace: true` to repoint) |
