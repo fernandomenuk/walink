@@ -1,6 +1,7 @@
 # Tag-driven releases:
 #   v2.1.0-rc.1  -> preprod: npm dist-tag "next", GitHub prerelease
 #   v2.1.0       -> prod:    npm dist-tag "latest", GitHub release
+# Each version also goes to GitHub Packages (npm.pkg.github.com) with the same dist-tag.
 # npm is skipped while the NPM_TOKEN secret is unset; the release always carries the npm pack tarball.
 name: Release
 
@@ -23,6 +24,7 @@ jobs:
     environment: ${{ contains(github.ref_name, '-') && 'preprod' || 'production' }}
     permissions:
       contents: write
+      packages: write
     env:
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
@@ -66,6 +68,22 @@ jobs:
             echo "$name@$version is already published; skipping."
           else
             npm publish --tag "${{ steps.meta.outputs.dist_tag }}"
+          fi
+
+      - name: Publish to GitHub Packages (skipped if this version already exists)
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          reg=https://npm.pkg.github.com
+          echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" >> "$NPM_CONFIG_USERCONFIG"
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version --registry "$reg" >/dev/null 2>&1; then
+            echo "$name@$version is already on GitHub Packages; skipping."
+          else
+            npm publish --registry "$reg" --tag "${{ steps.meta.outputs.dist_tag }}"
           fi
 
       - name: GitHub release
