@@ -15,7 +15,7 @@ import { createConnection } from './lib/connection.js'
 import { createContactStore } from './lib/contacts.js'
 import { createJournal } from './lib/journal.js'
 import { createPhone } from './lib/phone.js'
-import { acquireLock, clearHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
+import { acquireLock, clearHandover, declineHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
 import { log } from './lib/log.js'
 import { createSender } from './lib/sender.js'
 import { INSTRUCTIONS, registerTools } from './lib/tools.js'
@@ -171,7 +171,9 @@ if (LOGIN) {
   let releasing = false
   async function checkHandover() {
     const req = handoverRequest(HANDOVER)
-    if (!owner || releasing || !req || req.pid === process.pid) return
+    if (!owner || releasing || !req || req.pid === process.pid || req.declined) return
+    // A notification or question from another session must not cut off a question you're about to answer here.
+    if (req.soft && phone.waiting()) return declineHandover(HANDOVER, `the ${sessionLabel} session is waiting for your WhatsApp reply`)
     releasing = true
     owner = false
     log('info', 'handover_requested', { byPid: req.pid })
@@ -191,9 +193,9 @@ if (LOGIN) {
   }
 
   // Follower: the user approved "take over and send". Ask the owner to step down, then own and connect.
-  async function takeOver() {
+  async function takeOver({ soft = false } = {}) {
     const from = holder?.pid
-    requestHandover(HANDOVER)
+    requestHandover(HANDOVER, process.pid, { soft })
     try {
       const deadline = Date.now() + 30_000
       while (!owner) {
@@ -202,6 +204,8 @@ if (LOGIN) {
           return { ok: false, reason: other ? `another session (pid ${holder.pid}) took over WhatsApp first` : `the other session (pid ${from ?? '?'}) did not hand WhatsApp over within 30s` }
         }
         await sleep(500)
+        const declined = handoverRequest(HANDOVER)?.declined
+        if (declined) return { ok: false, reason: `${declined}; try again after that question is answered` }
         tryOwn()
       }
       const until = Date.now() + 20_000

@@ -11,6 +11,7 @@ One rule outranks everything else: **never send to the wrong person, never send 
 | `lib/contacts.js` | Contact/alias store, conservative resolver, phone/Unicode normalization, JID allowlist, resource keys |
 | `lib/approval.js` | Approval preview text + MCP elicitation (the human-approval boundary) |
 | `lib/sender.js` | One send end to end, serial queue, rate limit |
+| `lib/phone.js` | Phone channel: questions, reply matching, inbound filter, channel pushes |
 | `lib/file.js` | Reads a file to send (once), size limit, MIME type, secret-path warnings |
 | `lib/journal.js` | Append-only `sends.jsonl`, crash recovery, duplicate lookups |
 | `lib/lock.js` | Single owner of `auth/` across processes |
@@ -90,6 +91,21 @@ stateDiagram-v2
 - **The dialog** opens with the recipient, the file name and size, and the full real path, then the caption. It warns (⚠) about secret-looking paths (`.ssh`, `.aws`, `.env*`, `*.pem`, `id_*`, `credentials*`, `~/.whatsapp-mcp`, and similar), links, files outside the home folder, and names containing control or bidi characters. Any file can be sent: the user is the gate.
 - **Journal:** the `pending` line records `file: { name, size, sha256 }`, never the path or the contents. The duplicate and unknown-outcome guards key on the caption plus the file's fingerprint, so a blind resend of the same file after `OUTCOME UNKNOWN` is refused like text.
 - `SENT` still means the server ack for the message. An upload failure is reported as `OUTCOME UNKNOWN`, like any error after the handoff to the socket.
+
+## Phone channel
+
+Your own WhatsApp chat is a two-way line to the Claude Code session that owns WhatsApp.
+
+- **Out, with no dialog:** sends to your own chat (`me`, `whatsapp_notify_me`, `whatsapp_ask_me`) skip the approval dialog and the duplicate guards, because they can only reach you. Sends to anyone else are unchanged.
+- **Questions:** `whatsapp_ask_me` posts the question (with numbered options) and waits up to 25 minutes per call, under Claude Code's 30-minute idle timeout for stdio tools.
+  - It returns `REPLY`, `NO REPLY YET` (the question stays open for 24h), or `CANCELLED` (Esc: the question is closed and edited on WhatsApp).
+  - A swipe-reply names its question. Otherwise the newest open question of this session gets the answer. A bare number picks that option.
+  - A late answer is pushed into the session and kept in memory for `wait_for`.
+- **In:** replies to questions, and messages that start with `@claude`, are pushed as `notifications/claude/channel` (capability `experimental['claude/channel']`). Everything else you type in your own chat stays private. This needs Claude Code started with `--dangerously-load-development-channels server:walink` while channels are a research preview; without it, questions still work through the waiting call.
+- **What counts as input:** a message in your own chat (phone-number JID or LID), `fromMe`, delivered live (`notify`, not history sync), not a message walink sent (its ids are in the journal and in memory), not forwarded (someone else wrote it; walink reacts ⚠️), and not older than the question or than this session's ownership (2 minutes of clock skew allowed). Duplicates, edits, reactions and deletes are ignored.
+- **Acknowledgements:** walink reacts ✅ to an answer it delivered and 👀 to an `@claude` message it pushed. A swipe-reply to a closed question, or to another live session's question, gets a short notice instead.
+- **Journal:** questions are records (`Q1`, `Q2`, …) with the question's message id, owner pid and label, and expiry. Answers record the reply's id and length, never its text.
+- **Sessions:** only the owner has the socket, so only the owner receives. A follower's notification or question takes over with a *soft* request; the owner declines it while one of its questions is being waited on, and the follower gets `NOTHING SENT` with the reason. A dialog-approved send (a *hard* request) always proceeds and ends the old owner's waits with a clear reason.
 
 ## Recovery
 

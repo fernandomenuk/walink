@@ -3,7 +3,7 @@ import { fork } from 'node:child_process'
 import { utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { acquireLock, clearHandover, handoverFile, handoverRequest, releaseLock, requestHandover } from '../lib/lock.js'
+import { acquireLock, clearHandover, declineHandover, handoverFile, handoverRequest, releaseLock, requestHandover } from '../lib/lock.js'
 import { tick, tmp } from './helpers.js'
 
 const HOLDER = new URL('./fixtures/hold-lock.js', import.meta.url)
@@ -54,4 +54,15 @@ test('handover request: readable, only the requester clears it, dead requesters 
   assert.equal(handoverRequest(file), null)
   requestHandover(file, 2 ** 30) // no such process
   assert.equal(handoverRequest(file), null)
+})
+
+test('soft handover request: the owner can decline it, with a reason the requester reads', () => {
+  const file = handoverFile(join(tmp(), 'auth.lock'))
+  requestHandover(file, process.pid, { soft: true })
+  assert.equal(handoverRequest(file).soft, true)
+  declineHandover(file, 'the api session is waiting for your WhatsApp reply')
+  assert.equal(handoverRequest(file).declined, 'the api session is waiting for your WhatsApp reply')
+  assert.equal(handoverRequest(file).pid, process.pid, 'still the requester')
+  requestHandover(file)
+  assert.equal(handoverRequest(file).soft, undefined, 'a dialog-approved request is hard')
 })

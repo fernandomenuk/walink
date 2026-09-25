@@ -242,8 +242,8 @@ async function followerSetup({ approve, ok = true, sock, senderOpts = {} } = {})
     sock,
     senderOpts: {
       ...senderOpts,
-      takeOver: async () => {
-        calls.push(1)
+      takeOver: async (opts) => {
+        calls.push(opts ?? {})
         if (!ok) return { ok: false, reason: 'the other session (pid 4242) did not hand WhatsApp over within 30s' }
         h.setOwner(true)
         return { ok: true }
@@ -420,6 +420,6 @@ test('own chat: a repeat after OUTCOME UNKNOWN is allowed (a duplicate only reac
 test('own chat from a follower: takes over without a dialog', async () => {
   const { sender, previews, calls } = await followerSetup({ senderOpts: { selfJid: () => '94770000000@s.whatsapp.net' } })
   assert.equal((await sender.send({ to: 'me', text: 'hello' })).status, 'SENT')
-  assert.equal(calls.length, 1)
+  assert.deepEqual(calls, [{ soft: true }], 'a soft takeover: the owner may decline while it waits for a reply')
   assert.equal(previews.length, 0)
 })

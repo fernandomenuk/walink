@@ -29,11 +29,29 @@ From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add w
 | `whatsapp_send` | Send text, or a file as a document (`to`, `text`, optional `file` absolute path up to 100 MB, optional `resend_of` after an unknown outcome) |
 | `whatsapp_status` | Connection, session owner, approval support, unknown outcomes |
 | `whatsapp_find_contact` | Look up a name, alias or number |
+| `whatsapp_notify_me` | Notify you in your own chat (no dialog) |
+| `whatsapp_ask_me` | Ask you in your own chat and wait for the reply (`question`, `options`, `wait_minutes`, `wait_for`) |
 | `whatsapp_set_alias` | Remember `@name` → contact (`replace: true` to repoint) |
 
 Contacts are also listed as `@walink:wa://name` resources.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the state machines, failure semantics, recovery and security model.
+
+## Phone channel
+
+Claude can reach you on your phone, in your own WhatsApp chat, without an approval dialog:
+
+- "Run the tests and ping me on WhatsApp when done": `whatsapp_notify_me` sends `🤖 <project>` and the result.
+- "Ask me on WhatsApp before you drop that column": `whatsapp_ask_me` posts the question with numbered options. Reply with a number or your own words (swipe-reply if several questions are open). walink reacts ✅ when your answer reached Claude.
+- From your phone, start a message with `@claude` ("@claude what's the git status?"). walink reacts 👀 and passes it to the session. Other messages in your own chat stay private.
+
+Replies that arrive after Claude stopped waiting, and `@claude` messages, need Claude Code started with channels enabled (a research preview):
+
+```sh
+claude --dangerously-load-development-channels server:walink
+```
+
+Forwarded messages are never passed on (someone else wrote them), and old messages are never replayed.
 
 ## Releasing
 
