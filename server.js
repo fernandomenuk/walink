@@ -18,6 +18,7 @@ import { createJournal } from './lib/journal.js'
 import { createPhone } from './lib/phone.js'
 import { acquireLock, clearHandover, declineHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
 import { log } from './lib/log.js'
+import { createPresence, detectChannels, shouldReclaim } from './lib/presence.js'
 import { createSender } from './lib/sender.js'
 import { INSTRUCTIONS, registerTools } from './lib/tools.js'
 import pkg from './.claude-plugin/plugin.json' with { type: 'json' }
@@ -63,6 +64,7 @@ const makeSocket = async (auth) => {
 }
 
 let stopHeartbeat = null
+let presence = null
 let shuttingDown = false
 function shutdown(code = 0) {
   if (shuttingDown) return
@@ -74,12 +76,16 @@ function shutdown(code = 0) {
   }
   conn.stop()
   stopHeartbeat?.()
+  presence?.unregister()
   releaseLock(LOCK)
   process.exit(code)
 }
 process.on('SIGINT', () => shutdown(0))
 process.on('SIGTERM', () => shutdown(0))
-process.on('exit', () => releaseLock(LOCK))
+process.on('exit', () => {
+  presence?.unregister()
+  releaseLock(LOCK)
+})
 process.on('unhandledRejection', (e) => log('error', 'unhandled_rejection', { err: String(e?.message ?? e) }))
 
 let onSyncActivity = () => {}
@@ -193,7 +199,23 @@ if (LOGIN) {
       if (owner) return void (clearInterval(poll), (poll = null))
       const req = handoverRequest(HANDOVER)
       if (!req || req.pid === process.pid) tryOwn()
+      maybeReclaim()
     }, 10_000)
+  }
+
+  // Phone messages only reach Claude through a session started with channels: that session takes WhatsApp
+  // back from an owner that can't receive them (lib/presence.js shouldReclaim). Soft, so an owner waiting
+  // for a WhatsApp reply declines and the next poll retries.
+  // ponytail: a user-approved send starting while a reclaim is declined can lose its handover request to the
+  // reclaim's cleanup and fail as NOTHING SENT (never a duplicate); retrying the send works.
+  let reclaiming = false
+  function maybeReclaim() {
+    if (owner || reclaiming || !shouldReclaim({ listening, holderPid: holder?.pid, sessions: presence.list() })) return
+    reclaiming = true
+    log('info', 'channels_reclaim', { fromPid: holder.pid })
+    takeOver({ soft: true })
+      .then((r) => log(r.ok ? 'info' : 'warn', 'channels_reclaim_result', r))
+      .finally(() => (reclaiming = false))
   }
 
   // Owner: another session's user approved a send there. Stop taking sends, let in-flight ones finish
@@ -288,6 +310,8 @@ if (LOGIN) {
     getJournal: () => journal,
     sessionLabel,
     ownerSince: () => ownerSince,
+    listening: () => listening,
+    peers: () => presence.list(),
     pushChannel: (params) =>
       server.server.notification({ method: 'notifications/claude/channel', params }).catch((e) => log('warn', 'channel_push_failed', { err: e.message })),
   })
@@ -301,14 +325,23 @@ if (LOGIN) {
     syncGroups,
     sessionLabel,
     role,
+    listening: () => listening,
+    peers: () => presence.list(),
     getJournal: () => journal,
     elicitationSupported: () => Boolean(server.server.getClientCapabilities()?.elicitation),
   })
+
+  // Before owning: which session gets WhatsApp depends on who can receive phone messages.
+  const listening = await detectChannels()
+  presence = createPresence(DIR)
+  presence.register({ label: sessionLabel, channels: listening })
+  log('info', 'channels_detected', { listening })
 
   tryOwn()
   if (!owner) {
     log('info', 'session_follower', { ownerPid: holder?.pid })
     follow()
+    maybeReclaim()
   }
 
   // Exit with the client: an orphaned process would keep holding the WhatsApp session.

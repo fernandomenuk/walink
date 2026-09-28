@@ -13,6 +13,7 @@ One rule outranks everything else: **never send to the wrong person, never send 
 | `lib/approval.js` | Approval preview text + MCP elicitation (the human-approval boundary) |
 | `lib/sender.js` | One send end to end, serial queue, rate limit |
 | `lib/phone.js` | Phone channel: questions, reply matching, inbound filter, channel pushes |
+| `lib/presence.js` | Channels detection, session registry, which session should own WhatsApp |
 | `lib/file.js` | Reads a file to send (once), size limit, MIME type, secret-path warnings |
 | `lib/journal.js` | Append-only `sends.jsonl`, crash recovery, duplicate lookups |
 | `lib/lock.js` | Single owner of `auth/` across processes |
@@ -107,6 +108,7 @@ Your own WhatsApp chat is a two-way line to the Claude Code session that owns Wh
 - **Acknowledgements:** walink reacts ✅ to an answer it delivered and 👀 to an `@claude` message it pushed. A swipe-reply to a closed question, or to another live session's question, gets a short notice instead.
 - **Journal:** questions are records (`Q1`, `Q2`, …) with the question's message id, owner pid and label, and expiry. Answers record the reply's id and length, never its text.
 - **Sessions:** only the owner has the socket, so only the owner receives. A follower's notification or question takes over with a *soft* request; the owner declines it while one of its questions is being waited on, and the follower gets `NOTHING SENT` with the reason. A dialog-approved send (a *hard* request) always proceeds and ends the old owner's waits with a clear reason.
+- **Channels decide the owner:** Claude Code doesn't tell an MCP server whether it was started with channels, so each server reads its parent's command line (`lib/presence.js`; `WALINK_CHANNELS=1|0` overrides) and registers `sessions/<pid>.json` (`{pid, label, startedAt, channels}`, heartbeat-touched, dropped when the pid is dead or the heartbeat stopped). A follower with channels on sends a soft handover to an owner that isn't registered with `channels: true`; it never takes from another listening session, and a session without channels never reclaims, so ownership can't ping-pong. A send from a session without channels still takes WhatsApp (one socket), and the listening session takes it back on its next 10s poll. In that window, an `@claude` message gets ⚠️ and a notice to resend instead of a push nobody receives; a late answer is kept for `wait_for` with a notice. When detection can't tell (`null`), messages are pushed as before and no warning is sent.
 
 ## Groups
 
