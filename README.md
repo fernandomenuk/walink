@@ -95,7 +95,7 @@ Claude can reach you on your phone, in your own WhatsApp chat, without an approv
 Replies that arrive after Claude stopped waiting, and `@claude` messages, need Claude Code started with channels enabled (a research preview):
 
 ```sh
-claude --dangerously-load-development-channels server:plugin:walink:wa
+claude --dangerously-load-development-channels plugin:walink@walink
 ```
 
 Forwarded messages are never passed on (someone else wrote them), and old messages are never replayed.
