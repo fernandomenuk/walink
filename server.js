@@ -17,7 +17,7 @@ import { createGroupStore, resolveTarget } from './lib/groups.js'
 import { createJournal } from './lib/journal.js'
 import { createPhone } from './lib/phone.js'
 import { acquireLock, clearHandover, declineHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
-import { log } from './lib/log.js'
+import { log, muteConsole } from './lib/log.js'
 import { createPresence, detectChannels, shouldReclaim } from './lib/presence.js'
 import { createSender } from './lib/sender.js'
 import { INSTRUCTIONS, registerTools } from './lib/tools.js'
@@ -30,6 +30,12 @@ const JOURNAL = join(DIR, 'sends.jsonl')
 const HANDOVER = handoverFile(LOCK)
 mkdirSync(DIR, { recursive: true })
 const LOGIN = process.argv[2] === 'login'
+muteConsole() // before anything can print: dependencies dump key material through console (lib/log.js)
+// Login mode talks to the person at the terminal; console is muted, so write directly.
+const say = (line) => process.stdout.write(`${line}
+`)
+const sayErr = (line) => process.stderr.write(`${line}
+`)
 
 // Baileys' default pino logger writes to stdout, which would corrupt the MCP stream. Keep only error messages.
 const quiet = () => {}
@@ -105,8 +111,8 @@ const conn = createConnection({
   },
   onQr: (qr) => {
     console.clear()
-    qrcode.generate(qr, { small: true })
-    console.log('Scan with WhatsApp > Settings > Linked devices > Link a device')
+    qrcode.generate(qr, { small: true }, say)
+    say('Scan with WhatsApp > Settings > Linked devices > Link a device')
   },
   // Every (re)connect of the owner refreshes the group list: deletions and removals have no reliable event.
   onOpen: () => (LOGIN ? waitForSync() : syncGroups().catch((e) => log('warn', 'groups_sync_failed', { err: e.message }))),
@@ -114,7 +120,7 @@ const conn = createConnection({
     if (!LOGIN) return
     // Dead or corrupt credentials: wipe them so a fresh QR code appears.
     if (code === 401 || code === 500) return void rm(AUTH, { recursive: true, force: true }).then(() => conn.connect())
-    console.error(conn.whyUnusable())
+    sayErr(conn.whyUnusable())
     shutdown(1)
   },
 })
@@ -141,13 +147,13 @@ function handleGroupEvent(e) {
 
 // Login mode: exit once contact events go quiet for 20s after connecting.
 function waitForSync() {
-  console.log('Linked. Syncing contacts...')
+  say('Linked. Syncing contacts...')
   let timer
   onSyncActivity = () => {
     clearTimeout(timer)
     timer = setTimeout(() => {
       contacts.flush()
-      console.log(`Done: ${contacts.size} contacts saved in ${DIR}`)
+      say(`Done: ${contacts.size} contacts saved in ${DIR}`)
       shutdown(0)
     }, 20_000)
   }
@@ -157,7 +163,7 @@ function waitForSync() {
 if (LOGIN) {
   const lock = acquireLock(LOCK)
   if (!lock.owner) {
-    console.error(`WhatsApp is in use by another process (pid ${lock.holder?.pid}). Close the Claude Code sessions using it, then retry.`)
+    sayErr(`WhatsApp is in use by another process (pid ${lock.holder?.pid}). Close the Claude Code sessions using it, then retry.`)
     process.exit(1)
   }
   stopHeartbeat = startHeartbeat(LOCK)
