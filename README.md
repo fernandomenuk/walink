@@ -2,23 +2,53 @@
 
 MCP server that lets Claude Code send WhatsApp messages from your personal account through a Baileys linked device. Every send needs your approval in a dialog that the server itself shows you.
 
-## Install
+## Getting started
 
-walink is a Claude Code plugin. It needs Node 22+. In Claude Code:
+Works on Windows and Linux, and should work on Mac (not yet tested there).
 
+**Before you start, you need:**
+- **Claude Code** installed.
+- **Node.js 22 or newer.** Download it from https://nodejs.org. To check, open a terminal and type `node --version`; you should see `v22` or higher.
+- Your phone with WhatsApp.
+
+**1. Add walink to Claude Code.** Open Claude Code and type:
 ```
 /plugin marketplace add fernandomenuk/walink
-/plugin install walink@walink
-/walink:login
 ```
 
-`/walink:login` gives you a command to run in a separate terminal. It shows a QR code: on your phone, open WhatsApp > Settings > Linked devices > Link a device and scan it.
+**2. Install it:**
+```
+/plugin install walink@walink
+```
 
-**Updates:** turn on auto-update once in `/plugin` > Marketplaces > walink > Enable auto-update. Otherwise, update by hand with `/plugin marketplace update walink`.
+**3. Turn on automatic updates:** type `/plugin`, open **Marketplaces**, pick **walink**, and choose **Enable auto-update**.
 
-Had walink installed the old way? Remove it first so it doesn't run twice: `claude mcp remove walink -s user`. Your link, aliases and groups stay (they live in `~/.whatsapp-mcp`).
+**4. Link your WhatsApp.** Type:
+```
+/walink:login
+```
+Claude gives you a command. Open a **new terminal window**, paste the command, and press Enter. A QR code appears.
 
-From a clone: `npm install`, `npm test`, `npm run login`, then `/plugin marketplace add /path/to/walink` and `/plugin install walink@walink`.
+**5. Scan the QR code.** On your phone, open WhatsApp > **Settings** > **Linked devices** > **Link a device**, and scan it. Wait until the terminal says **Done**, then close that window.
+
+**6. Try it.** Back in Claude Code, type:
+```
+send me hi
+```
+The message arrives in your own WhatsApp chat. Then try a friend: `say hi to @john`. A box shows you the exact message; tick **Send** and confirm. Nothing is ever sent without your OK.
+
+**Good to know**
+- Messages to other people end with "🤖 This message is written by Claude".
+- walink uses your personal WhatsApp through an unofficial connection (like an extra WhatsApp Web). WhatsApp could restrict accounts that use unofficial clients; use it for normal personal messaging.
+- To stop using it: `/plugin uninstall walink@walink`, then on your phone remove the device under **Linked devices**.
+
+<details><summary>For developers</summary>
+
+- Had walink installed the old way? Remove it first so it doesn't run twice: `claude mcp remove walink -s user`. Your link, aliases and groups stay in `~/.whatsapp-mcp`.
+- From a clone: `npm install`, `npm test`, `npm run login`, then `/plugin marketplace add /path/to/walink` and `/plugin install walink@walink`.
+- Update by hand: `/plugin marketplace update walink`.
+
+</details>
 
 ## Use
 
