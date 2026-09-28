@@ -1,0 +1,14 @@
+{
+  "name": "walink",
+  "version": "2.0.0",
+  "description": "Send WhatsApp messages from your own account, with an approval dialog for every send",
+  "author": { "name": "fernandomenuk" },
+  "repository": "https://github.com/fernandomenuk/walink",
+  "license": "MIT",
+  "mcpServers": {
+    "walink": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server.js"]
+    }
+  }
+}

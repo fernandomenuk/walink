@@ -8,8 +8,7 @@ Last updated 2026-09-25, late in the second session (after the rc.4 release). It
 | --- | --- |
 | Code | `C:\Users\User\dev\active\whatsapp-automation`. The folder isn't renamed on purpose, because the MCP registration points here. |
 | GitHub | https://github.com/fernandomenuk/walink (private), branch `main`. Everything is pushed. |
-| Latest release | **v2.0.0-rc.4 (preprod)**: a GitHub prerelease with the `.tgz` attached, plus GitHub Packages `@fernandomenuk/walink@2.0.0-rc.4` (dist-tag `next`). Older releases: rc.0 (GitHub only), rc.1, rc.2, rc.3. |
-| npm (npmjs.com) | `@fernandomenuk/walink`. **Not published.** No `NPM_TOKEN` secret yet; the release workflow skips npm until one is set. |
+| Distribution | **Claude Code plugin** from this GitHub repo (`.claude-plugin/`), branch `plugin` until merged. npm publishing and `release.yml` were removed. A release = bump `version` in `.claude-plugin/plugin.json` and push to `main`. Old rc.0 to rc.4 GitHub releases and GitHub Packages builds still exist. |
 | Claude Code MCP | Registered at user scope as `walink` → `node C:\Users\User\dev\active\whatsapp-automation\server.js` |
 | Runtime data | `~/.whatsapp-mcp/`: `auth/` (linked-device creds, unencrypted), `auth.lock` (+ `auth.lock.handover` during a handover), `contacts.json` (~2,446), `groups.json` (group metadata only: ~171 groups, never member lists; which ones are enabled), `aliases.json` (aliases may point at a person or a group), `sends.jsonl` (the send and question journal; never message text) |
 | Audit doc | "WhatsApp MCP Review Answers" (Claude Docs): https://claude.ai/code/artifact/99dbc6e0-1fc2-473e-8e76-d78e313afa63. It covers the **old** v1 code. |
@@ -22,7 +21,7 @@ Last updated 2026-09-25, late in the second session (after the rc.4 release). It
 - **Phone channel:**
   - `whatsapp_ask_me` asks you on WhatsApp and waits (up to 25 min per call). Reply with a number or text, and swipe-reply if several questions are open. You'll see ✅.
   - Late replies, and messages you start with `@claude`, are pushed into the session. You'll see 👀.
-  - This needs Claude Code started with `claude --dangerously-load-development-channels server:walink`.
+  - This needs Claude Code started with `claude --dangerously-load-development-channels server:plugin:walink:walink`.
 - **Several sessions:** one owns WhatsApp and the others follow.
   - An approved send in a follower takes WhatsApp over, with one dialog.
   - A notification or question from a follower asks *softly*, and the owner declines while it's waiting for your reply.
@@ -69,7 +68,7 @@ Design, failure semantics and the security model are in `docs/DESIGN.md`. User d
 13. `7b77413` Aliases appear as `wa://alias/<name>` resources in the `@` menu, and alias/enable/disable changes send `notifications/resources/list_changed`.
 14. Version bumps and releases: rc.1 (`505b2a8`), rc.2 (`a11f747`), rc.3 (`323d3de`), rc.4 (`bb6b19d`).
 
-Tests: **113** (`npm test`); 112 pass and 1 is skipped on Windows (a symlink test that needs Developer Mode; it runs in CI on Linux).
+Tests: **114** (`npm test`); 113 pass and 1 is skipped on Windows (a symlink test that needs Developer Mode; it runs in CI on Linux).
 
 ## Decisions made (don't re-ask)
 - **No elicitation support** → refuse to send. There's no weaker fallback.
@@ -123,23 +122,18 @@ Tests: **113** (`npm test`); 112 pass and 1 is skipped on Windows (a symlink tes
    - Watch for the exact WhatsApp error text (an open question in the spec).
    - Also check whether a new alias shows up in the `@` menu **without** `/mcp` reconnect, which tells us whether Claude Code honours `list_changed`.
 1. **Live-test the channel items above.**
-   - Exit, then run `claude --dangerously-load-development-channels server:walink` in this folder.
+   - Exit, then run `claude --dangerously-load-development-channels server:plugin:walink:walink` in this folder.
    - Unknowns to watch:
      - Does Claude Code actually deliver `<channel source="walink">` messages?
      - Does Esc send a cancellation that the server sees?
      - Do progress notifications keep a long `whatsapp_ask_me` alive past the 30-min idle timeout? The design caps each wait at 25 min anyway.
-2. **npm publishing** (optional; GitHub Packages works already):
-   - Confirm the npm username with `npm whoami`.
-   - Create an npm Automation token and run `gh secret set NPM_TOKEN`.
-   - Re-run the latest release.
-3. **Promote to prod** once happy: `npm version 2.0.0 && git push --follow-tags`. The commit must be on `main`.
-4. **Sharing with someone** (for example Akka):
-   - The repo is private. Either add them as a collaborator, or send them the release `.tgz`.
-   - They install with `npm i -g ./fernandomenuk-walink-<ver>.tgz` or `npm i -g github:fernandomenuk/walink#v2.0.0-rc.3`.
-   - Then `walink login`, then `claude mcp add walink -s user -- walink`. On Windows, use `-- cmd /c walink`.
-   - They link *their own* WhatsApp. Tell them about the Baileys and unofficial-client account risk.
-   - Nobody has sent a release to Akka yet. Only the rc.1 file was downloaded, to `~/Downloads`; rc.4 is the one to share now.
-5. **Optional:** required reviewers on the `production` environment. That needs a paid GitHub plan on a private repo.
+2. **Plugin: live-test and ship** (branch `plugin`):
+   - `claude mcp remove walink -s user`, then `/plugin marketplace add C:\Users\User\dev\active\whatsapp-automation` and `/plugin install walink@walink`.
+   - Check `whatsapp_status`, a send to yourself and a send with a dialog, and that the notify header still shows the project folder (the plugin server's working folder).
+   - Merge to `main`.
+3. **Sharing with someone** (for example Akka):
+   - The repo is **private**, so `/plugin marketplace add fernandomenuk/walink` only works for people with access. Make it public, or add them as a collaborator.
+   - They run the three commands in the README Install section. They link *their own* WhatsApp. Tell them about the Baileys and unofficial-client account risk.
 
 ## Idea backlog (from brainstorming; not started)
 - **Group fingerprint:** show members you know and the creation date in the enable and send dialogs, to tell same-named groups apart. The user declined it for now; the member count is used instead.
@@ -155,13 +149,11 @@ Tests: **113** (`npm test`); 112 pass and 1 is skipped on Windows (a symlink tes
 
 ## Handy commands
 ```sh
-npm test                          # 113 tests
-npm run login                     # re-link / refresh contacts (QR). Refuses if a session holds auth.lock:
-                                  #   stop that session's walink server first, and run it in its own terminal window
+npm test                          # 114 tests
+npm run login                     # re-link / refresh contacts (QR), in its own terminal. Refuses if a linked session holds auth.lock
 gh run list --limit 5             # CI / release runs
 gh release list                   # releases
-claude mcp get walink             # check the registration
-claude --dangerously-load-development-channels server:walink   # enable the phone channel for a session
+claude --dangerously-load-development-channels server:plugin:walink:walink   # enable the phone channel for a session
 ```
 - After changing walink's code, run `/mcp` and reconnect `walink` in the session. The running server keeps the old code until then.
 - Your local `gh` token can't read packages (it lacks `read:packages`). Check GitHub Packages in the release run's log instead.

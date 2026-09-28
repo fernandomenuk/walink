@@ -1,0 +1,12 @@
+{
+  "name": "walink",
+  "owner": { "name": "fernandomenuk" },
+  "description": "walink: WhatsApp for Claude Code",
+  "plugins": [
+    {
+      "name": "walink",
+      "source": "./",
+      "description": "Send WhatsApp messages from your own account, with an approval dialog for every send"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import qrcode from 'qrcode-terminal'
 import { elicitationApprover } from './lib/approval.js'
-import { createConnection } from './lib/connection.js'
+import { createConnection, NOT_LINKED } from './lib/connection.js'
 import { createContactStore } from './lib/contacts.js'
 import { createGroupStore, resolveTarget } from './lib/groups.js'
 import { createJournal } from './lib/journal.js'
@@ -20,7 +20,7 @@ import { acquireLock, clearHandover, declineHandover, handoverFile, handoverRequ
 import { log } from './lib/log.js'
 import { createSender } from './lib/sender.js'
 import { INSTRUCTIONS, registerTools } from './lib/tools.js'
-import pkg from './package.json' with { type: 'json' }
+import pkg from './.claude-plugin/plugin.json' with { type: 'json' }
 
 const DIR = process.env.WHATSAPP_MCP_DIR || join(homedir(), '.whatsapp-mcp')
 const AUTH = join(DIR, 'auth')
@@ -167,6 +167,8 @@ if (LOGIN) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
   function tryOwn() {
+    // Not linked yet: leave the lock free so /walink:login can run while this session is open; follow() retries.
+    if (!selfJid()) return
     const lock = acquireLock(LOCK)
     if (!lock.owner) {
       holder = lock.holder
@@ -224,6 +226,7 @@ if (LOGIN) {
 
   // Follower: the user approved "take over and send". Ask the owner to step down, then own and connect.
   async function takeOver({ soft = false } = {}) {
+    if (!selfJid()) return { ok: false, reason: NOT_LINKED }
     const from = holder?.pid
     requestHandover(HANDOVER, process.pid, { soft })
     try {

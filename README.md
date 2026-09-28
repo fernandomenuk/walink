@@ -4,16 +4,21 @@ MCP server that lets Claude Code send WhatsApp messages from your personal accou
 
 ## Install
 
-Requires Node 22+.
+walink is a Claude Code plugin. It needs Node 22+. In Claude Code:
 
-```sh
-npx -y @fernandomenuk/walink login      # scan the QR code: WhatsApp > Settings > Linked devices > Link a device
-claude mcp add walink -s user -- npx -y @fernandomenuk/walink
+```
+/plugin marketplace add fernandomenuk/walink
+/plugin install walink@walink
+/walink:login
 ```
 
-Use `@fernandomenuk/walink@next` in both commands to run the preprod channel.
+`/walink:login` gives you a command to run in a separate terminal. It shows a QR code: on your phone, open WhatsApp > Settings > Linked devices > Link a device and scan it.
 
-From a clone: `npm install`, `npm run login`, `npm test`, then `claude mcp add walink -s user -- node /path/to/walink/server.js`.
+**Updates:** turn on auto-update once in `/plugin` > Marketplaces > walink > Enable auto-update. Otherwise, update by hand with `/plugin marketplace update walink`.
+
+Had walink installed the old way? Remove it first so it doesn't run twice: `claude mcp remove walink -s user`. Your link, aliases and groups stay (they live in `~/.whatsapp-mcp`).
+
+From a clone: `npm install`, `npm test`, `npm run login`, then `/plugin marketplace add /path/to/walink` and `/plugin install walink@walink`.
 
 ## Use
 
@@ -60,30 +65,14 @@ Claude can reach you on your phone, in your own WhatsApp chat, without an approv
 Replies that arrive after Claude stopped waiting, and `@claude` messages, need Claude Code started with channels enabled (a research preview):
 
 ```sh
-claude --dangerously-load-development-channels server:walink
+claude --dangerously-load-development-channels server:plugin:walink:walink
 ```
 
 Forwarded messages are never passed on (someone else wrote them), and old messages are never replayed.
 
 ## Releasing
 
-Pushing a tag triggers a release. The tag must match the version in `package.json`, and CI (Windows + Linux) must pass before anything is published.
+Users get a new version only when `version` in `.claude-plugin/plugin.json` changes. Pushes that don't change it reach nobody.
 
-| Channel | Tag | npm dist-tag | GitHub |
-| --- | --- | --- | --- |
-| preprod | `v2.1.0-rc.1` | `next` | prerelease |
-| prod | `v2.1.0` (must be on `main`) | `latest` | release |
-
-```sh
-npm version prerelease --preid rc   # 2.1.0-rc.0 -> 2.1.0-rc.1, commits and tags
-git push --follow-tags              # publishes to @next
-
-npm version 2.1.0                   # promote: commits and tags v2.1.0
-git push --follow-tags              # publishes to @latest
-```
-
-One-time setup:
-- Add an npm automation token as the `NPM_TOKEN` repository secret: `gh secret set NPM_TOKEN`.
-- Optionally, add required reviewers to the `production` environment so a person approves prod publishes.
-
-Re-running a release is safe: versions that are already published are skipped.
+1. Change `version` in `.claude-plugin/plugin.json` (for example `2.0.0` to `2.1.0`).
+2. Commit and push to `main`.

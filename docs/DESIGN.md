@@ -102,7 +102,7 @@ Your own WhatsApp chat is a two-way line to the Claude Code session that owns Wh
   - It returns `REPLY`, `NO REPLY YET` (the question stays open for 24h), or `CANCELLED` (Esc: the question is closed and edited on WhatsApp).
   - A swipe-reply names its question. Otherwise the newest open question of this session gets the answer. A bare number picks that option.
   - A late answer is pushed into the session and kept in memory for `wait_for`.
-- **In:** replies to questions, and messages that start with `@claude`, are pushed as `notifications/claude/channel` (capability `experimental['claude/channel']`). Everything else you type in your own chat stays private. This needs Claude Code started with `--dangerously-load-development-channels server:walink` while channels are a research preview; without it, questions still work through the waiting call.
+- **In:** replies to questions, and messages that start with `@claude`, are pushed as `notifications/claude/channel` (capability `experimental['claude/channel']`). Everything else you type in your own chat stays private. This needs Claude Code started with `--dangerously-load-development-channels server:plugin:walink:walink` while channels are a research preview; without it, questions still work through the waiting call.
 - **What counts as input:** a message in your own chat (phone-number JID or LID), `fromMe`, delivered live (`notify`, not history sync), not a message walink sent (its ids are in the journal and in memory), not forwarded (someone else wrote it; walink reacts ⚠️), and not older than the question or than this session's ownership (2 minutes of clock skew allowed). Duplicates, edits, reactions and deletes are ignored.
 - **Acknowledgements:** walink reacts ✅ to an answer it delivered and 👀 to an `@claude` message it pushed. A swipe-reply to a closed question, or to another live session's question, gets a short notice instead.
 - **Journal:** questions are records (`Q1`, `Q2`, …) with the question's message id, owner pid and label, and expiry. Answers record the reply's id and length, never its text.
@@ -132,10 +132,10 @@ sending   --ack--> sent | --error ack--> failed | --timeout/close/crash--> unkno
   - On load, the journal turns `sending` into `unknown` and `pending` into `expired`. The recovery lines are themselves journaled.
   - `whatsapp_status` lists unresolved unknowns with their time.
   - The user checks WhatsApp and then either leaves the entry alone (it drops out of the guard after 24h) or asks to resend (`resend_of`).
-- **Corrupt `contacts.json` or `aliases.json`:** the file is renamed to `*.corrupt-<ts>`, the server starts with an empty store, and `status` names the file. Contacts come back with `npm run login`. Aliases can be restored by hand from the quarantined file.
+- **Corrupt `contacts.json` or `aliases.json`:** the file is renamed to `*.corrupt-<ts>`, the server starts with an empty store, and `status` names the file. Contacts come back with `/walink:login`. Aliases can be restored by hand from the quarantined file.
 - **Torn journal line:** it is skipped on load, and the next append starts on a new line.
 - **Terminal states:**
-  - `logged_out` / `bad_session`: run `npm run login`, which wipes the dead credentials and shows a QR code.
+  - `logged_out` / `bad_session`: run `/walink:login`, which wipes the dead credentials and shows a QR code.
   - `conflict`: close the other client, then reconnect the MCP (`/mcp`).
   - `forbidden`: the account is restricted, so there is nothing to automate.
 

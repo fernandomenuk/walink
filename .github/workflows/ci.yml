@@ -21,5 +21,3 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - name: Package contents
-        run: npm pack --dry-run
