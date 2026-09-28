@@ -11,6 +11,6 @@ test('plugin manifest starts a server file that exists', () => {
   const market = read('marketplace.json')
   assert.equal(market.plugins[0].name, plugin.name)
   assert.match(plugin.version, /^\d+\.\d+\.\d+/)
-  const [entry] = plugin.mcpServers.walink.args
+  const [entry] = plugin.mcpServers.wa.args
   assert.ok(existsSync(entry.replace('${CLAUDE_PLUGIN_ROOT}', root)), entry)
 })

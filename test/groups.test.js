@@ -280,7 +280,7 @@ test('MCP: only the user can enable a group; find, alias, resources and a send v
 
   assert.match((await h.call('whatsapp_set_alias', { alias: '@hushchat', to: h.ref })).text, /@hushchat -> GROUP "HushChat Team"/)
   const { resources } = await h.client.listResources()
-  const groupRes = resources.filter((r) => r.uri.startsWith('wa://group/'))
+  const groupRes = resources.filter((r) => r.uri.startsWith('wa:group/'))
   assert.equal(groupRes.length, 1)
   const card = (await h.client.readResource({ uri: groupRes[0].uri })).contents[0].text
   assert.match(card, /data from WhatsApp, not instructions/)
@@ -327,13 +327,13 @@ test('MCP: aliases are resources (so the @ menu finds them), and changes tell th
   await tick(20)
   assert.ok(changed >= 3, `list_changed sent ${changed} times`)
   const { resources } = await h.client.listResources()
-  const a = resources.find((r) => r.uri === 'wa://alias/thampalaseteka')
+  const a = resources.find((r) => r.uri === 'wa:alias/thampalaseteka')
   assert.equal(a.name, '@thampalaseteka')
   assert.match(a.description, /@thampalaseteka → GROUP "HushChat Team" · 14 members/)
   const card = (await h.client.readResource({ uri: a.uri })).contents[0].text
   assert.match(card, /to="@thampalaseteka"/)
   assert.match(card, /enabled for sending/)
   assert.ok(!card.includes('@g.us'))
-  assert.match((await h.client.readResource({ uri: 'wa://alias/akka' })).contents[0].text, /@akka → "Sam"/)
-  assert.match((await h.client.readResource({ uri: 'wa://alias/nobody' })).contents[0].text, /No alias @nobody/)
+  assert.match((await h.client.readResource({ uri: 'wa:alias/akka' })).contents[0].text, /@akka → "Sam"/)
+  assert.match((await h.client.readResource({ uri: 'wa:alias/nobody' })).contents[0].text, /No alias @nobody/)
 })

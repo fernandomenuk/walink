@@ -21,7 +21,7 @@ Last updated 2026-09-25, late in the second session (after the rc.4 release). It
 - **Phone channel:**
   - `whatsapp_ask_me` asks you on WhatsApp and waits (up to 25 min per call). Reply with a number or text, and swipe-reply if several questions are open. You'll see ✅.
   - Late replies, and messages you start with `@claude`, are pushed into the session. You'll see 👀.
-  - This needs Claude Code started with `claude --dangerously-load-development-channels server:plugin:walink:walink`.
+  - This needs Claude Code started with `claude --dangerously-load-development-channels server:plugin:walink:wa`.
 - **Several sessions:** one owns WhatsApp and the others follow.
   - An approved send in a follower takes WhatsApp over, with one dialog.
   - A notification or question from a follower asks *softly*, and the owner declines while it's waiting for your reply.
@@ -122,7 +122,7 @@ Tests: **114** (`npm test`); 113 pass and 1 is skipped on Windows (a symlink tes
    - Watch for the exact WhatsApp error text (an open question in the spec).
    - Also check whether a new alias shows up in the `@` menu **without** `/mcp` reconnect, which tells us whether Claude Code honours `list_changed`.
 1. **Live-test the channel items above.**
-   - Exit, then run `claude --dangerously-load-development-channels server:plugin:walink:walink` in this folder.
+   - Exit, then run `claude --dangerously-load-development-channels server:plugin:walink:wa` in this folder.
    - Unknowns to watch:
      - Does Claude Code actually deliver `<channel source="walink">` messages?
      - Does Esc send a cancellation that the server sees?
@@ -153,7 +153,7 @@ npm test                          # 114 tests
 npm run login                     # re-link / refresh contacts (QR), in its own terminal. Refuses if a linked session holds auth.lock
 gh run list --limit 5             # CI / release runs
 gh release list                   # releases
-claude --dangerously-load-development-channels server:plugin:walink:walink   # enable the phone channel for a session
+claude --dangerously-load-development-channels server:plugin:walink:wa   # enable the phone channel for a session
 ```
 - After changing walink's code, run `/mcp` and reconnect `walink` in the session. The running server keeps the old code until then.
 - Your local `gh` token can't read packages (it lacks `read:packages`). Check GitHub Packages in the release run's log instead.

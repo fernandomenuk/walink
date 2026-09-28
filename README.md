@@ -40,7 +40,7 @@ From a clone: `npm install`, `npm test`, `npm run login`, then `/plugin marketpl
 | `whatsapp_ask_me` | Ask you in your own chat and wait for the reply (`question`, `options`, `wait_minutes`, `wait_for`) |
 | `whatsapp_set_alias` | Remember `@name` → a contact, or a group (`to: "group:<key>"`). `replace: true` repoints |
 
-Contacts, your aliases and enabled groups are listed as resources, so typing `@` in Claude Code suggests them: `@plugin:walink:walink:wa://akka` (contact), `@plugin:walink:walink:wa://alias/thampalaseteka` (alias), `@plugin:walink:walink:wa://group/test-akka~3e95ad` (group). A new alias or an enabled group tells Claude Code the list changed.
+Contacts, your aliases and enabled groups are listed as resources, so typing `@` in Claude Code suggests them: `@plugin:walink:wa:wa:akka` (contact), `@plugin:walink:wa:wa:alias/thampalaseteka` (alias), `@plugin:walink:wa:wa:group/test-akka~3e95ad` (group). A new alias or an enabled group tells Claude Code the list changed.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the state machines, failure semantics, recovery and security model.
 
@@ -65,7 +65,7 @@ Claude can reach you on your phone, in your own WhatsApp chat, without an approv
 Replies that arrive after Claude stopped waiting, and `@claude` messages, need Claude Code started with channels enabled (a research preview):
 
 ```sh
-claude --dangerously-load-development-channels server:plugin:walink:walink
+claude --dangerously-load-development-channels server:plugin:walink:wa
 ```
 
 Forwarded messages are never passed on (someone else wrote them), and old messages are never replayed.
