@@ -98,6 +98,10 @@ Replies that arrive after Claude stopped waiting, and `@claude` messages, need C
 claude --dangerously-load-development-channels plugin:walink@walink
 ```
 
+Several Claude Code sessions can run walink, but only one holds WhatsApp and receives your phone messages. A session started with channels takes WhatsApp from one that wasn't, within about 10 seconds. If an `@claude` message still lands in a session that can't receive it, walink reacts ⚠️ and replies with what to do (resend in a few seconds, or start Claude Code with the command above), so nothing is dropped silently. `whatsapp_status` shows which session holds WhatsApp and whether it receives phone messages.
+
+walink tells whether channels are on by reading how Claude Code was started. If it gets that wrong, set `WALINK_CHANNELS=1` (or `0`) in the environment you start Claude Code from.
+
 Forwarded messages are never passed on (someone else wrote them), and old messages are never replayed.
 
 ## Releasing

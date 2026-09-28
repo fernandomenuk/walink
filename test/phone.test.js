@@ -19,10 +19,10 @@ function incoming(text, { jid = SELF, fromMe = true, quote, forwarded, ts = Date
   }
 }
 
-async function phoneSetup({ ownerSince = 0, now } = {}) {
+async function phoneSetup({ ownerSince = 0, now, listening, peers } = {}) {
   const h = await setup({ senderOpts: { sessionLabel: 'proj' } })
   const pushed = []
-  const phone = createPhone({ conn: h.conn, sender: h.sender, getJournal: () => h.journal, pushChannel: (p) => pushed.push(p), sessionLabel: 'proj', ownerSince: () => ownerSince, now })
+  const phone = createPhone({ conn: h.conn, sender: h.sender, getJournal: () => h.journal, pushChannel: (p) => pushed.push(p), sessionLabel: 'proj', ownerSince: () => ownerSince, now, listening: listening && (() => listening()), peers })
   const recv = async (...msgs) => {
     phone.onMessages({ messages: msgs, type: 'notify' })
     await tick(10)
@@ -172,4 +172,69 @@ test('handover: waiting calls end with a clear reason', async () => {
   const r = await p
   assert.equal(r.status, 'NO REPLY YET')
   assert.match(r.text, /moved to another Claude Code session \(pid 99\)/)
+})
+
+// Channels: what happens when the session holding WhatsApp can't push into Claude Code.
+const notices = (sock) => sock.sent.map((m) => m.text)
+
+test('not listening, no other session can: ⚠️ and a notice with the command to fix it, nothing pushed', async () => {
+  const { recv, pushed, sock } = await phoneSetup({ listening: () => false })
+  await recv(incoming('@claude run the linter'))
+  await tick(20)
+  assert.equal(pushed.length, 0)
+  assert.deepEqual(sock.reactions.map((r) => r.text), ['⚠️'])
+  assert.match(notices(sock).at(-1), /nothing received this\. The proj session holds WhatsApp but was started without phone messages/)
+  assert.match(notices(sock).at(-1), /claude --dangerously-load-development-channels plugin:walink@walink/)
+})
+
+test('not listening, another session can: the notice names it and says to resend', async () => {
+  const peers = () => [
+    { pid: process.pid, label: 'proj', channels: false },
+    { pid: 7, label: 'other-proj', channels: false },
+    { pid: 8, label: 'api', channels: true },
+  ]
+  const { recv, pushed, sock } = await phoneSetup({ listening: () => false, peers })
+  await recv(incoming('@claude status?'))
+  await tick(20)
+  assert.equal(pushed.length, 0)
+  assert.match(notices(sock).at(-1), /reached the proj session, which can't receive phone messages\. The api session can; .*Send it again then\./)
+})
+
+test('listening unknown: pushed as before, no warning (never a false alarm)', async () => {
+  const { recv, pushed, sock } = await phoneSetup({ listening: () => null })
+  await recv(incoming('@claude hi'))
+  assert.deepEqual(pushed, [{ content: 'hi', meta: { kind: 'message' } }])
+  assert.deepEqual(sock.reactions.map((r) => r.text), ['👀'])
+  assert.equal(sock.sent.length, 0)
+})
+
+test('not listening: plain notes stay private, with no reply', async () => {
+  const { recv, sock } = await phoneSetup({ listening: () => false })
+  await recv(incoming('buy milk'))
+  await tick(20)
+  assert.equal(sock.sent.length, 0)
+  assert.equal(sock.reactions.length, 0)
+})
+
+test('not listening: a late answer is saved (✅), the notice names the question, wait_for still gets it', async () => {
+  let listening = true
+  const { phone, sock, recv, pushed } = await phoneSetup({ listening: () => listening })
+  await (await asked(phone, sock, { question: 'Deploy now?', waitMs: 20 })).result
+  listening = false
+  await recv(incoming('yes go'))
+  await tick(20)
+  assert.equal(pushed.length, 0)
+  assert.equal(sock.reactions.at(-1).text, '✅')
+  assert.match(notices(sock).at(-1), /saved\. The proj session can't receive phone messages, so it sees this reply only when it checks question Q1/)
+  assert.equal((await phone.ask({ waitFor: 'Q1' })).text, 'REPLY (question Q1): yes go')
+})
+
+test('not listening: an answer to a question being waited on returns normally, no notice', async () => {
+  const { phone, sock, recv } = await phoneSetup({ listening: () => false })
+  const { result: p } = await asked(phone, sock, { question: 'Go?' })
+  const sentBefore = sock.sent.length
+  await recv(incoming('yes'))
+  assert.equal((await p).text, 'REPLY (question Q1): yes')
+  await tick(20)
+  assert.equal(sock.sent.length, sentBefore)
 })

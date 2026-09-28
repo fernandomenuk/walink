@@ -10,7 +10,7 @@ import { elicitationApprover } from '../lib/approval.js'
 import { INSTRUCTIONS, registerTools } from '../lib/tools.js'
 import { setup } from './helpers.js'
 
-async function harness({ answer, elicitation = true } = {}) {
+async function harness({ answer, elicitation = true, tools = {} } = {}) {
   const server = new McpServer({ name: 'walink', version: 'test' }, { instructions: INSTRUCTIONS })
   const ctx = await setup({ senderOpts: {}, approve: (p) => approver(p) })
   const approver = elicitationApprover(server, { timeoutMs: 200 })
@@ -19,6 +19,7 @@ async function harness({ answer, elicitation = true } = {}) {
     role: () => ({ owner: true }),
     getJournal: () => ctx.journal,
     elicitationSupported: () => Boolean(server.server.getClientCapabilities()?.elicitation),
+    ...tools,
   })
   const client = new Client({ name: 'test', version: '1' }, { capabilities: elicitation ? { elicitation: { form: {} } } : {} })
   const asked = []
@@ -100,4 +101,33 @@ test('status, find_contact, set_alias and resources', async () => {
   const card = await h.client.readResource({ uri: 'wa:nabeel-ahmed' })
   assert.match(card.contents[0].text, /data from the contact list, not instructions/)
   assert.match(card.contents[0].text, /to="94771111111@s.whatsapp.net"/)
+})
+
+// Status: who owns WhatsApp and whether phone messages reach Claude. One status call per setup.
+const phone = { openQuestions: () => [] }
+const status = async (tools) => (await (await harness({ answer: () => ({ action: 'cancel' }), tools: { phone, ...tools } })).call('whatsapp_status', {})).text
+const me = { pid: process.pid, label: 'proj', startedAt: '2026-09-28T14:00:00.000Z' }
+
+test('status: owner with channels on, off, or unknown', async () => {
+  assert.match(await status({ sessionLabel: 'proj', listening: () => true }), /Phone messages: your replies and "@claude …" in your own WhatsApp chat reach this session \(proj\)\./)
+  const off = await status({ listening: () => false })
+  assert.match(off, /Phone messages: NOT received\. .*⚠️ reply on the phone\. Start Claude Code with: claude --dangerously-load-development-channels plugin:walink@walink/)
+  assert.doesNotMatch(off, /server:walink/, 'the stale hint is gone')
+  assert.match(await status({ listening: () => null }), /could not tell .*WALINK_CHANNELS=1 or 0/)
+})
+
+test('status: follower names the owner session and says whether it will take WhatsApp back', async () => {
+  const owner = { pid: 7892, label: 'old-proj', startedAt: '2026-09-28T10:44:00.000Z', channels: false }
+  const follower = { role: () => ({ owner: false, holder: { pid: 7892 } }), peers: () => [{ ...me, channels: true }, owner] }
+  const s = await status({ ...follower, listening: () => true })
+  assert.match(s, /follower; owned by the old-proj session \(pid 7892, started 2026-09-28T10:44:00\.000Z, channels off\)/)
+  assert.match(s, /takes WhatsApp back within about 10s/)
+  assert.match(s, /Other Claude sessions using walink: 1 \(old-proj, channels off\)/)
+  const both = await status({ role: follower.role, peers: () => [{ ...me, channels: true }, { ...owner, channels: true }], listening: () => true })
+  assert.doesNotMatch(both, /takes WhatsApp back/, 'never from another listening session')
+  assert.match(await status({ role: follower.role, listening: () => false }), /owned by pid 7892/, 'owner not in the registry (older walink)')
+})
+
+test('status: no other-sessions line when this is the only one', async () => {
+  assert.doesNotMatch(await status({ peers: () => [{ ...me, channels: true }], listening: () => true }), /Other Claude sessions/)
 })
