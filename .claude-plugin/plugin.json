@@ -1,6 +1,6 @@
 {
   "name": "walink",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Send WhatsApp messages from your own account, with an approval dialog for every send",
   "author": { "name": "fernandomenuk" },
   "repository": "https://github.com/fernandomenuk/walink",
