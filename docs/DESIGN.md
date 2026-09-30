@@ -118,6 +118,17 @@ Your own WhatsApp chat is a two-way line to the Claude Code session that owns Wh
 - **Sessions:** only the owner has the socket, so only the owner receives. A follower's notification or question takes over with a *soft* request; the owner declines it while one of its questions is being waited on, and the follower gets `NOTHING SENT` with the reason. A dialog-approved send (a *hard* request) always proceeds and ends the old owner's waits with a clear reason.
 - **Channels decide the owner:** Claude Code doesn't tell an MCP server whether it was started with channels, so each server reads its parent's command line (`lib/presence.js`; `WALINK_CHANNELS=1|0` overrides) and registers `sessions/<pid>.json` (`{pid, label, startedAt, channels}`, heartbeat-touched, dropped when the pid is dead or the heartbeat stopped). A follower with channels on sends a soft handover to an owner that isn't registered with `channels: true`; it never takes from another listening session, and a session without channels never reclaims, so ownership can't ping-pong. A send from a session without channels still takes WhatsApp (one socket), and the listening session takes it back on its next 10s poll. In that window, an `@claude` message gets ⚠️ and a notice to resend instead of a push nobody receives; a late answer is kept for `wait_for` with a notice. When detection can't tell (`null`), messages are pushed as before and no warning is sent.
 
+## Auto-reply
+
+Chats the user enabled let Claude answer on their own (`lib/autoreply.js`). This is the one send to other people without a dialog, so it is narrow:
+
+- **Opt-in per person, by dialog:** `whatsapp_autoreply_enable` resolves a 1:1 contact (never a group or your own chat) and asks in a dialog the model can't answer. `whatsapp_autoreply_disable` and `/walink:autoreply off` (the global switch, `server.js autoreply`) need none. State lives in `autoreply.json` (`{on, chats: {jid: {name, enabledAt, pausedUntil?, pauseReason?}}}`), re-read on every use, so the switch applies at once and survives handovers.
+- **In:** a live (`notify`) message in an enabled chat, matched on `remoteJid` or `remoteJidAlt` (WhatsApp may use the LID or the phone-number JID), is pushed as `kind="incoming"` with `chat=<jid>`. The text is quoted and labelled as data. Media is described ("sent a sticker"), not shown. Other chats are never read.
+- **Out:** `whatsapp_reply` → `send({kind: 'auto'})`, refused unless the chat is enabled, not paused, the global switch is on, their message came in the last 15 minutes, and the caps allow it: 3 replies per incoming message, 20 per chat per hour (hitting it pauses the chat for an hour and tells you), 60 a day across chats. Caps count journal records with `kind: 'auto'` that may have gone out, so they survive restarts. Text only, 1000 characters, always signed.
+- **Looking human (account safety):** 3–10s before reacting, then read receipt, `available`, `composing` for about 50ms per character (2–12s), `paused`, send, `unavailable`. All best-effort. The global switch and pauses are re-checked after typing, so `off` stops a reply in progress.
+- **Stepping back:** a message you type in that chat yourself pauses it for 30 minutes. Three answers in a row arriving within 2s of our reply look like another bot: the chat pauses for an hour and you get a notice.
+- **Injection:** the other person's text reaches a session that has other tools. The server confines what it can cause through walink (replies to that chat only, capped, no files); the instructions tell Claude to treat it as data and to hand anything needing your decision to `whatsapp_notify_me`. Claude Code's own permission prompts still guard everything else. Run auto-reply in a dedicated session, not a coding one.
+
 ## Groups
 
 Full design: `docs/specs/2026-09-25-groups-design.md`.
@@ -158,7 +169,7 @@ sending   --ack--> sent | --error ack--> failed | --timeout/close/crash--> unkno
   - the exact text, with character and line counts;
   - any warnings.
 
-  Only `accept` with **Send** ticked sends. The model can't answer this dialog, and no tool argument can bypass it. A client without elicitation can't send at all.
+  Only `accept` with **Send** ticked sends. The model can't answer this dialog, and no `whatsapp_send` argument can bypass it. A client without elicitation can't send at all. The exceptions: your own chat, and replies in chats you enabled for auto-reply (see Auto-reply).
 - **Recipients** are 1:1 chats (`<digits>@s.whatsapp.net` or `<digits>@lid`) or **enabled groups reached by an explicit reference** (`group:<key>` or an alias). Raw `@g.us`, broadcasts, newsletters and other domains are refused, including through aliases and raw IDs. A plain name never resolves to a group.
 - **Groups are opt-in.** Only `whatsapp_group_enable`, through a dialog the model cannot answer, makes a group sendable. Each group send re-fetches the group live (membership, admin-only, community), shows a GROUP dialog with the name, member count and "everyone will see this", and above 50 members requires typing the name. The send uses exactly the metadata shown (Baileys `cachedGroupMetadata`). `groups.json` stores metadata only, never member lists.
   - Phone numbers are checked with `onWhatsApp`.

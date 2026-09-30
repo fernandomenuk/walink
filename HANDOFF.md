@@ -142,13 +142,17 @@ Tests: **114** (`npm test`); 113 pass and 1 is skipped on Windows (a symlink tes
   - Check that `${last_assistant_message}` and `${transcript_path}` substitute.
   - Check the 60s waiting ping (it needs a session without bypass permissions).
 
+## Auto-reply (2026-09-30, branch `autoreply`)
+- Enabled 1:1 chats reach the session as `kind="incoming"`; `whatsapp_reply` answers with no dialog, within caps and with human pacing. See DESIGN "Auto-reply". `/walink:autoreply on|off`.
+- This reverses two earlier decisions on purpose (the user asked for fully automatic replies): other people's messages are read, and one kind of send to others skips the dialog.
+- **TODO, not live-tested yet:** channel delivery at all (start Claude Code with channels, `@claude ping`), then an enabled chat end to end: typing dots show, a message you type pauses it.
+
 ## Idea backlog (from brainstorming; not started)
 - **Protect settings when relinking:** on 2026-09-28, `~/.whatsapp-mcp` was moved to `~/.whatsapp-mcp-backup` by hand, and the enabled groups and aliases were lost. The fix idea: `login` or `whatsapp_status` notices the backup and offers to bring `groups.json` and `aliases.json` along.
 - **Warn before the link dies:** the phone's 14-day inactivity limit, and a logged-out alert that doesn't go over WhatsApp.
 - **Group fingerprint:** show members you know and the creation date in the enable and send dialogs, to tell same-named groups apart. The user declined it for now; the member count is used instead.
 - **The contact resource card** still tells Claude to send to the raw personal JID. Point it at an alias or reference instead (a follow-up noted in the groups spec).
 - **Images and videos** (groups spec phase 5): need `sharp`/`jimp` and `ffmpeg`, and WhatsApp recompresses them. Also: upload once, send to many.
-- **Read messages**: "what did Akka reply?". Needs careful prompt-injection handling, because other people's text would be treated as data.
 - **Unsend and edit** the last message. Small, and a real safety net.
 - **Delivered/read receipts** in the status and the journal.
 - **Phone as an input device**: screenshots and voice notes sent to your own chat → Claude.

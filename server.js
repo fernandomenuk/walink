@@ -2,6 +2,7 @@
 // walink: WhatsApp MCP server for Claude Code (Baileys linked device). Design and failure semantics: docs/DESIGN.md
 //   node server.js login   -> link by QR (or refresh contacts), then exit
 //   node server.js notify [on|off|<minutes>] -> show or change the hook pings (lib/hooks.js), then exit
+//   node server.js autoreply [on|off] -> show or switch auto-reply for every chat (lib/autoreply.js), then exit
 //   node server.js         -> MCP stdio server (stdout is protocol; all logs go to stderr)
 import { mkdirSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -12,6 +13,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import qrcode from 'qrcode-terminal'
 import { elicitationApprover } from './lib/approval.js'
+import { createAutoReply } from './lib/autoreply.js'
 import { createConnection, NOT_LINKED } from './lib/connection.js'
 import { createContactStore } from './lib/contacts.js'
 import { createGroupStore, resolveTarget } from './lib/groups.js'
@@ -46,6 +48,19 @@ if (process.argv[2] === 'notify') {
     process.exit(1)
   }
   say(describeNotifySettings(s))
+  process.exit(0)
+}
+
+if (process.argv[2] === 'autoreply') {
+  const a = createAutoReply(DIR)
+  const arg = String(process.argv[3] ?? '').toLowerCase()
+  if (arg && arg !== 'on' && arg !== 'off') {
+    sayErr('Usage: node server.js autoreply [on|off]')
+    process.exit(1)
+  }
+  if (arg) a.setOn(arg === 'on')
+  const chats = a.list().map((c) => `${c.name || c.jid}${c.paused ? ` (paused: ${c.paused})` : ''}`)
+  say(`Auto-reply is ${a.isOn() ? 'ON' : 'OFF'}. Enabled chats: ${chats.length ? chats.join(', ') : 'none (enable one by asking Claude, e.g. "enable auto-reply for @name")'}.`)
   process.exit(0)
 }
 
@@ -309,7 +324,9 @@ if (LOGIN) {
     { instructions: INSTRUCTIONS, capabilities: { experimental: { 'claude/channel': {} } } },
   )
   const approve = elicitationApprover(server)
+  const autoreply = createAutoReply(DIR)
   sender = createSender({
+    autoreply,
     contacts,
     conn,
     role,
@@ -323,6 +340,7 @@ if (LOGIN) {
     newMsgId: () => generateMessageIDV2(conn.me()),
   })
   phone = createPhone({
+    autoreply,
     conn,
     sender,
     getJournal: () => journal,
@@ -334,6 +352,7 @@ if (LOGIN) {
       server.server.notification({ method: 'notifications/claude/channel', params }).catch((e) => log('warn', 'channel_push_failed', { err: e.message })),
   })
   registerTools(server, {
+    autoreply,
     hooks: createHookHandler({ notify: sender.notify, settings: () => loadNotifySettings(DIR) }),
     contacts,
     conn,

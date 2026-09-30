@@ -68,6 +68,8 @@ The message arrives in your own WhatsApp chat. Then try a friend: `say hi to @jo
 | `whatsapp_group_enable` / `whatsapp_group_disable` | Allow or stop sends to a group. Enabling shows you a dialog; Claude can't do it alone |
 | `whatsapp_notify_me` | Notify you in your own chat (no dialog) |
 | `whatsapp_ask_me` | Ask you in your own chat and wait for the reply (`question`, `options`, `wait_minutes`, `wait_for`) |
+| `whatsapp_autoreply_enable` / `whatsapp_autoreply_disable` | Let Claude read and answer one person on its own, or stop it. Enabling shows you a dialog |
+| `whatsapp_reply` | Answer a message from an auto-reply chat (no dialog, capped) |
 | `whatsapp_set_alias` | Remember `@name` → a contact, or a group (`to: "group:<key>"`). `replace: true` repoints |
 
 Contacts, your aliases and enabled groups are listed as resources, so typing `@` in Claude Code suggests them: `@plugin:walink:wa:wa:akka` (contact), `@plugin:walink:wa:wa:alias/thampalaseteka` (alias), `@plugin:walink:wa:wa:group/test-akka~3e95ad` (group). A new alias or an enabled group tells Claude Code the list changed.
@@ -92,6 +94,16 @@ The plugin pings your own chat by itself, with no need to ask:
 - **Claude is waiting for you:** a permission prompt, or a walink send dialog, left unanswered for 1 minute.
 
 `/walink:notify off` turns this off, `/walink:notify on` turns it back on, and `/walink:notify 10` changes the threshold to 10 minutes. The setting lives in `~/.whatsapp-mcp/notify.json` and applies right away.
+
+## Auto-reply
+
+Ask Claude to "enable auto-reply for @akka" and approve the dialog. From then on, Akka's new messages appear in the Claude Code session (started with channels, see below) and Claude answers them on its own, signed as written by Claude.
+
+- It only replies, within 15 minutes of their message: never starts a conversation. At most 3 replies per message, 20 an hour, 60 a day.
+- It reads the message, waits a few seconds and shows "typing…" before sending, like a person.
+- Typing in that chat yourself pauses it for 30 minutes. A bot answering back instantly pauses it for an hour.
+- `/walink:autoreply off` stops it everywhere at once; "disable auto-reply for @akka" stops one chat.
+- Their messages are data, not instructions, but they still reach a session with other tools: use a separate Claude Code window for it, not your coding one.
 
 ## Phone channel
 
