@@ -36,6 +36,9 @@ export function fakeSocket({ behavior = () => 'ack', missing = [], lidMap = {}, 
     sent: [],
     reactions: [], // { jid, text, key } from best-effort sendRaw
     edits: [], // { jid, text, key }
+    signals: [], // 'read' | presence type | 'send', in order (auto-reply pacing)
+    readMessages: async () => void s.signals.push('read'),
+    sendPresenceUpdate: async (type) => void s.signals.push(type),
     ended: false,
     onWhatsApp: async (jid) => [{ jid, exists: !missing.includes(jid) }],
     signalRepository: { lidMapping: { getPNForLID: async (lid) => lidMap[lid] ?? null } },
@@ -52,6 +55,7 @@ export function fakeSocket({ behavior = () => 'ack', missing = [], lidMap = {}, 
       if (content.react) return void s.reactions.push({ jid, text: content.react.text, key: content.react.key })
       if (content.edit) return void s.edits.push({ jid, text: content.text, key: content.edit })
       s.sent.push(content.document ? { jid, ...content, messageId } : { jid, text: content.text, messageId })
+      s.signals.push('send')
       return outcome(messageId, content)
     },
     // The relay half of a split media send (prepareMessage uploaded first).
