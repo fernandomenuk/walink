@@ -1,0 +1,31 @@
+{
+  "description": "walink: ping your own WhatsApp chat when a long task finishes or a prompt is left waiting (turn off with /walink:notify off)",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "mcp_tool", "server": "plugin:walink:wa", "tool": "whatsapp_hook", "input": { "event": "start" }, "timeout": 10 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "mcp_tool", "server": "plugin:walink:wa", "tool": "whatsapp_hook", "input": { "event": "stop", "message": "${last_assistant_message}" }, "timeout": 10 }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|elicitation_dialog",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:walink:wa",
+            "tool": "whatsapp_hook",
+            "input": { "event": "waiting", "kind": "${notification_type}", "message": "${message}", "transcript": "${transcript_path}" },
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

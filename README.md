@@ -84,11 +84,20 @@ Groups are opt-in and stricter than people:
 
 Before each group send walink looks the group up live: it refuses if you left, the group is gone, only admins can post and you aren't one, or it's a community (post in its announcements group). Files go to groups the same way as to people ("send the latest APK to @hushchat"): Claude finds the file, the dialog shows its name, size and path.
 
+## Pings
+
+The plugin pings your own chat by itself, with no need to ask:
+
+- **A long task finished:** a turn that ran 3 minutes or more sends `✅ Done after 7 min` and the start of Claude's reply. Quick answers never ping, and there's no second ping if Claude already notified you in that turn.
+- **Claude is waiting for you:** a permission prompt, or a walink send dialog, left unanswered for 1 minute.
+
+`/walink:notify off` turns this off, `/walink:notify on` turns it back on, and `/walink:notify 10` changes the threshold to 10 minutes. The setting lives in `~/.whatsapp-mcp/notify.json` and applies right away.
+
 ## Phone channel
 
 Claude can reach you on your phone, in your own WhatsApp chat, without an approval dialog:
 
-- "Run the tests and ping me on WhatsApp when done": `whatsapp_notify_me` sends `🤖 <project>` and the result.
+- "Run the tests and ping me on WhatsApp when done": `whatsapp_notify_me` sends `🤖 walink · <project>` and the result.
 - "Ask me on WhatsApp before you drop that column": `whatsapp_ask_me` posts the question with numbered options. Reply with a number or your own words (swipe-reply if several questions are open). walink reacts ✅ when your answer reached Claude.
 - From your phone, start a message with `@claude` ("@claude what's the git status?"). walink reacts 👀 and passes it to the session. Other messages in your own chat stay private.
 

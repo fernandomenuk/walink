@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // walink: WhatsApp MCP server for Claude Code (Baileys linked device). Design and failure semantics: docs/DESIGN.md
 //   node server.js login   -> link by QR (or refresh contacts), then exit
+//   node server.js notify [on|off|<minutes>] -> show or change the hook pings (lib/hooks.js), then exit
 //   node server.js         -> MCP stdio server (stdout is protocol; all logs go to stderr)
 import { mkdirSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -14,6 +15,7 @@ import { elicitationApprover } from './lib/approval.js'
 import { createConnection, NOT_LINKED } from './lib/connection.js'
 import { createContactStore } from './lib/contacts.js'
 import { createGroupStore, resolveTarget } from './lib/groups.js'
+import { createHookHandler, describeNotifySettings, loadNotifySettings, updateNotifySettings } from './lib/hooks.js'
 import { createJournal } from './lib/journal.js'
 import { createPhone } from './lib/phone.js'
 import { acquireLock, clearHandover, declineHandover, handoverFile, handoverRequest, isAlive, releaseLock, requestHandover, startHeartbeat } from './lib/lock.js'
@@ -36,6 +38,16 @@ const say = (line) => process.stdout.write(`${line}
 `)
 const sayErr = (line) => process.stderr.write(`${line}
 `)
+
+if (process.argv[2] === 'notify') {
+  const s = updateNotifySettings(DIR, process.argv[3])
+  if (!s) {
+    sayErr('Usage: node server.js notify [on|off|<minutes>]')
+    process.exit(1)
+  }
+  say(describeNotifySettings(s))
+  process.exit(0)
+}
 
 // Baileys' default pino logger writes to stdout, which would corrupt the MCP stream. Keep only error messages.
 const quiet = () => {}
@@ -322,6 +334,7 @@ if (LOGIN) {
       server.server.notification({ method: 'notifications/claude/channel', params }).catch((e) => log('warn', 'channel_push_failed', { err: e.message })),
   })
   registerTools(server, {
+    hooks: createHookHandler({ notify: sender.notify, settings: () => loadNotifySettings(DIR) }),
     contacts,
     conn,
     sender,

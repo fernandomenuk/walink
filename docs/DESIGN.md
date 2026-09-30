@@ -94,6 +94,14 @@ stateDiagram-v2
 - **Journal:** the `pending` line records `file: { name, size, sha256 }`, never the path or the contents. The duplicate and unknown-outcome guards key on the caption plus the file's fingerprint, so a blind resend of the same file after `OUTCOME UNKNOWN` is refused like text.
 - `SENT` still means the server ack for the message. The upload runs before the message is relayed, so an upload failure (or a crash during it) is a certain `NOT SENT` and a retry is allowed; errors after the relay starts are `OUTCOME UNKNOWN` (see "Media: upload, then relay").
 
+## Hook pings
+
+- `hooks/hooks.json` has three `mcp_tool` hooks (`UserPromptSubmit`, `Stop`, and `Notification` for `permission_prompt|elicitation_dialog`). They call the session's own server (`plugin:walink:wa`) through the `whatsapp_hook` tool, so there is no IPC: a follower's ping is the same soft takeover as `whatsapp_notify_me`.
+- `whatsapp_hook` returns empty content at once and never `isError`. Hook output is read like stdout (on `UserPromptSubmit` it would reach Claude's context), a `Stop` hook waits for the result, and an error would show on every turn. Failures are only logged.
+- **Stop:** pings when the time since `UserPromptSubmit` is at least `minMinutes`, unless `whatsapp_notify_me` already ran in that turn. A turn with no recorded start (for example one begun by a channel message) never pings.
+- **Waiting:** records the transcript's size, then pings after 60s if it hasn't changed. Answering a prompt appends to the transcript, so the worst case is a missed ping, never a false one. A new turn or a Stop cancels the timer.
+- **Settings:** `notify.json` (`{on, minMinutes}`, default on with 3 minutes) is read on every hook, so `/walink:notify` (which runs `server.js notify`) applies without a restart. Plugin hooks can't be disabled one plugin at a time, so this switch is the off button.
+
 ## Phone channel
 
 Your own WhatsApp chat is a two-way line to the Claude Code session that owns WhatsApp.
@@ -172,3 +180,5 @@ sending   --ack--> sent | --error ack--> failed | --timeout/close/crash--> unkno
 - A reassigned phone number (the old owner changed numbers) can't be detected. The approval dialog shows the number, so check it.
 - Local numbers without a country code are refused rather than guessed.
 - Server versions before 2.0 don't respect `auth.lock`. After upgrading, restart every Claude Code session.
+- Hook pings need a Claude Code version with `mcp_tool` hooks. In headless `claude -p` runs, the process exits right after `Stop`, so the task-finished ping usually doesn't get out.
+- A hook ping from a session that doesn't own WhatsApp moves ownership to it (a soft handover, like `whatsapp_notify_me`). A session started with channels takes it back within about 10 seconds.
