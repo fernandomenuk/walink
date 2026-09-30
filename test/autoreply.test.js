@@ -16,11 +16,11 @@ const from = (jid, text, { fromMe = false, ts = Date.now(), id = `A${++n}`, alt,
   message: message ?? { conversation: text },
 })
 
-async function arSetup({ now = Date.now } = {}) {
+async function arSetup({ now = Date.now, onSleep = () => {} } = {}) {
   const dir = tmp()
   const autoreply = createAutoReply(dir, { now: () => now() })
   const slept = []
-  const h = await setup({ dir, senderOpts: { autoreply, sleep: async (ms) => void slept.push(ms), random: () => 0.5 } })
+  const h = await setup({ dir, senderOpts: { autoreply, sleep: async (ms) => void (slept.push(ms), onSleep(ms)), random: () => 0.5 } })
   const pushed = []
   const phone = createPhone({ conn: h.conn, sender: h.sender, getJournal: () => h.journal, pushChannel: (p) => pushed.push(p), autoreply })
   const recv = async (...msgs) => {
@@ -94,7 +94,7 @@ test('typing in the chat yourself pauses auto-reply there', async () => {
 
 test('instant answers to our replies, three in a row, look like a bot: pause and tell the user', async () => {
   let clock = 1_000_000_000_000
-  const t = await arSetup({ now: () => clock })
+  const t = await arSetup({ now: () => clock, onSleep: (ms) => (clock += ms) }) // the typing pause takes time
   t.autoreply.enable(NABEEL, 'Nabeel Ahmed')
   await t.recv(from(NABEEL, 'start', { ts: clock }))
   for (let i = 0; i < 3; i++) {
