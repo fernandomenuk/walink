@@ -131,3 +131,12 @@ test('status: follower names the owner session and says whether it will take Wha
 test('status: no other-sessions line when this is the only one', async () => {
   assert.doesNotMatch(await status({ peers: () => [{ ...me, channels: true }], listening: () => true }), /Other Claude sessions/)
 })
+
+test('whatsapp_hook returns empty content, never an error (hook output would reach the conversation)', async () => {
+  const seen = []
+  const h = await harness({ tools: { hooks: { handle: (i) => seen.push(i), markNotified() {} } } })
+  const r = await h.client.callTool({ name: 'whatsapp_hook', arguments: { event: 'start' } })
+  assert.deepEqual(r.content, [])
+  assert.ok(!r.isError)
+  assert.deepEqual(seen, [{ event: 'start' }])
+})

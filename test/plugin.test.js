@@ -14,3 +14,15 @@ test('plugin manifest starts a server file that exists', () => {
   const [entry] = plugin.mcpServers.wa.args
   assert.ok(existsSync(entry.replace('${CLAUDE_PLUGIN_ROOT}', root)), entry)
 })
+
+test('plugin hooks call walink\'s own whatsapp_hook tool', () => {
+  const { hooks } = JSON.parse(readFileSync(join(root, 'hooks', 'hooks.json'), 'utf8'))
+  const tools = readFileSync(join(root, 'lib', 'tools.js'), 'utf8')
+  const all = Object.values(hooks).flat().flatMap((m) => m.hooks)
+  assert.ok(all.length >= 3)
+  for (const h of all) {
+    assert.equal(h.type, 'mcp_tool')
+    assert.equal(h.server, 'plugin:walink:wa')
+    assert.ok(tools.includes(`'${h.tool}'`), h.tool)
+  }
+})
